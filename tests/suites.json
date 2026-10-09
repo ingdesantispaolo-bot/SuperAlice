@@ -841,6 +841,7 @@
       "tests/integration/uta-simulation/contract-search.spec.ts",
       "tests/integration/uta-simulation/guards.spec.ts",
       "tests/integration/uta-simulation/risk-guards.spec.ts",
+      "tests/integration/uta-simulation/rebalance.spec.ts",
       "tests/integration/uta-simulation/ccxt-tools.spec.ts"
     ],
     "scope": "UTA account, manager, guards, order synchronization and snapshots composed with production MockBroker; no configured accounts, public providers or venue writes."

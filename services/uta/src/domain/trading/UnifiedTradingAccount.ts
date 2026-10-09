@@ -38,6 +38,7 @@ import type {
 } from './git/types.js'
 import { createGuardPipeline, resolveGuards } from './guards/index.js'
 import { dayKey } from './guards/order-math.js'
+import { planRebalance, RebalanceError, targetPortfolioId, validateTargetPortfolio, type RebalancePlan, type RebalancePolicy, type TargetPortfolio } from './rebalance.js'
 import './contract-ext.js'
 
 /** Structured broker refusals that prove the write was not placed. */
@@ -815,6 +816,62 @@ export class UnifiedTradingAccount {
   stageCancelOrder(params: { orderId: string }): AddResult {
     this._assertCanCreateProposal()
     return this.git.add({ action: 'cancelOrder', orderId: params.orderId })
+  }
+
+  // ==================== Target portfolio ====================
+
+  /**
+   * Plan the orders that move this account to a target portfolio: deltas
+   * net of held positions AND working orders, so planning the same target
+   * again after it was sent yields no orders. Reads the broker; stages
+   * nothing. Refuses when open orders or any quote are unavailable.
+   */
+  async planRebalance(target: TargetPortfolio, policy?: RebalancePolicy): Promise<RebalancePlan> {
+    this._assertCanCreateProposal()
+    validateTargetPortfolio(target, new Date(), policy)
+    if (!this.broker.getOpenOrders) {
+      throw new RebalanceError(`Account "${this.label}" cannot list open orders — refusing to plan without them`)
+    }
+    const [account, positions, openOrders] = await this._callBroker(() => Promise.all([
+      this.broker.getAccount(),
+      this.broker.getPositions(),
+      this.broker.getOpenOrders!(),
+    ]))
+    for (const p of positions) this.stampAliceId(p.contract)
+    for (const o of openOrders) this.stampAliceId(o.contract)
+
+    const ids = new Set<string>(target.weights.map((w) => w.aliceId))
+    for (const p of positions) if (!p.quantity.isZero() && p.contract.aliceId) ids.add(p.contract.aliceId)
+    const quotes = new Map<string, Quote>()
+    for (const id of ids) {
+      const contract = this.contractFromAliceId(id)
+      quotes.set(id, await this._callBroker(() => this.broker.getQuote(contract)))
+    }
+    return planRebalance({ target, account, positions, openOrders, quotes, now: new Date(), policy })
+  }
+
+  /**
+   * Stage the planned orders (sells first) as market orders. Does not commit:
+   * the returned `suggestedMessage` carries the target identity for the
+   * commit, keeping strategy version and provenance in the ledger.
+   */
+  async stageRebalance(target: TargetPortfolio, policy?: RebalancePolicy): Promise<{ plan: RebalancePlan; staged: number; suggestedMessage: string }> {
+    // One commit = one target: never mix a rebalance into other staged work,
+    // and fail before staging anything rather than half-way through.
+    const status = this.git.status()
+    if (status.staged.length > 0 || status.pendingHash) {
+      throw new RebalanceError('Staging area is not empty — commit/push or reject the current proposal before staging a rebalance')
+    }
+    if (status.unresolved.length > 0) {
+      throw new RebalanceError(`Account has ${status.unresolved.length} operation(s) with unknown outcome — resolve them before rebalancing`)
+    }
+    const plan = await this.planRebalance(target, policy)
+    for (const order of plan.orders) {
+      this.stagePlaceOrder({ aliceId: order.aliceId, action: order.action, orderType: 'MKT', totalQuantity: order.quantity })
+    }
+    const suggestedMessage = `rebalance ${target.strategy}@${target.strategyVersion} → ${targetPortfolioId(target)}` +
+      (target.source ? ` (source ${target.source})` : '')
+    return { plan, staged: plan.orders.length, suggestedMessage }
   }
 
   // ==================== Git flow ====================

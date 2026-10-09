@@ -717,6 +717,36 @@ Optional: attach takeProfit and/or stopLoss for automatic exit orders.`,
       },
     }),
 
+    stageRebalance: tool({
+      description: `Turn a TARGET PORTFOLIO (long-only weights + cash weight, e.g. from an AutoQuant study or a backtest) into the orders that move the account there.
+Orders are the deltas net of held positions AND working orders, so re-running the same target never doubles an order; sells come first.
+dryRun: true previews the plan without staging. Otherwise market orders are staged (nothing is committed or sent).
+NEXT: tradingCommit with the returned suggestedMessage, then tradingPush (human approval).
+Refuses: weights + cashWeight not summing to 1, negative weights, an expired target, missing quotes, foreign-currency instruments, short positions, or a non-empty staging area.`,
+      inputSchema: z.object({
+        source: z.string().describe(sourceDesc(true)),
+        strategy: z.string().describe('Strategy name, e.g. "equal-weight"'),
+        strategyVersion: z.string().describe('Frozen strategy version that produced the weights'),
+        validUntil: z.string().describe('ISO-8601 expiry; after it the target is refused as stale'),
+        decisionAt: z.string().optional().describe('ISO-8601 decision time; defaults to now'),
+        provenance: z.string().optional().describe('Input provenance: dataset snapshot hash, research run id'),
+        weights: z.array(z.object({
+          aliceId: z.string().describe('Contract ID (format: accountId|nativeKey)'),
+          weight: z.string().describe('Decimal string in [0, 1]'),
+        })).describe('Target weights per instrument; omitted held instruments are sold'),
+        cashWeight: z.string().describe('Decimal string; weights + cashWeight = 1'),
+        minTradeValue: positiveNumeric.optional().describe('Skip trades below this notional (account currency)'),
+        dryRun: z.boolean().default(false).describe('Preview only — stage nothing'),
+      }).meta({ examples: [{ source: 'ibkr-paper', strategy: 'equal-weight', strategyVersion: '1', validUntil: '2026-10-10T20:00:00Z', weights: [{ aliceId: 'ibkr-paper|SPY', weight: '0.5' }, { aliceId: 'ibkr-paper|IEF', weight: '0.45' }], cashWeight: '0.05', dryRun: true }] }),
+      execute: async ({ source, dryRun, minTradeValue, provenance, decisionAt, ...rest }) => {
+        const uta = await manager.resolveOne(source)
+        const target = { ...rest, decisionAt: decisionAt ?? new Date().toISOString(), ...(provenance && { source: provenance }) }
+        const policy = minTradeValue ? { minTradeValue } : undefined
+        if (dryRun) return { source: uta.id, plan: await uta.planRebalance(target, policy) }
+        return { source: uta.id, ...await uta.stageRebalance(target, policy) }
+      },
+    }),
+
     modifyOrder: tool({
       description: 'Stage an order modification.\nNOTE: This stages the operation. Call tradingCommit + tradingPush to execute.',
       inputSchema: z.object({

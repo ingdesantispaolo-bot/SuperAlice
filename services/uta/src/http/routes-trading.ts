@@ -533,6 +533,33 @@ export function createTradingRoutes(ctx: UTAEngineContext) {
     }
   })
 
+  // Target portfolio → order plan. `plan` reads the broker and stages
+  // nothing; `stage-rebalance` stages the planned orders (no commit/push).
+  // Body: { target: TargetPortfolio, policy?: RebalancePolicy }.
+  app.post('/uta/:id/rebalance/plan', async (c) => {
+    const uta = ctx.utaManager.get(c.req.param('id'))
+    if (!uta) return c.json({ error: 'Account not found' }, 404)
+    const body = await c.req.json().catch(() => ({})) as { target?: unknown; policy?: unknown }
+    if (!body.target || typeof body.target !== 'object') return c.json({ error: 'target is required' }, 400)
+    try {
+      return c.json(await uta.planRebalance(body.target as never, body.policy as never))
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400)
+    }
+  })
+
+  app.post('/uta/:id/wallet/stage-rebalance', async (c) => {
+    const uta = ctx.utaManager.get(c.req.param('id'))
+    if (!uta) return c.json({ error: 'Account not found' }, 404)
+    const body = await c.req.json().catch(() => ({})) as { target?: unknown; policy?: unknown }
+    if (!body.target || typeof body.target !== 'object') return c.json({ error: 'target is required' }, 400)
+    try {
+      return c.json(await uta.stageRebalance(body.target as never, body.policy as never))
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400)
+    }
+  })
+
   // Resolve an unknown dispatch outcome (manual, evidence-backed — like push,
   // never an AI tool). Body: { commitHash, operationIndex, outcome:
   // 'not-placed' | 'placed', orderId?, filledQty?, filledPrice?, note }.

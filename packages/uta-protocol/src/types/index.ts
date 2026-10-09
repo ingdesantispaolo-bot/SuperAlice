@@ -13,6 +13,7 @@
 export * from './errors.js'
 export * from './broker.js'
 export * from './git.js'
+export * from './rebalance.js'
 export * from './manager.js'
 // contract-ext extends the IBKR Contract type via declaration merge —
 // importing the package once per process suffices to register the

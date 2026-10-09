@@ -191,6 +191,50 @@ describe('inline trading commits', () => {
   })
 })
 
+describe('stageRebalance tool', () => {
+  const weights = [{ aliceId: 'ibkr-paper|SPY', weight: '0.6' }, { aliceId: 'ibkr-paper|IEF', weight: '0.35' }]
+
+  function fakeUta() {
+    const calls: Array<{ kind: string; target: Record<string, unknown>; policy: unknown }> = []
+    const plan = { targetId: 'tp-1', equity: '10000', orders: [], skipped: [], projectedCash: '500.00' }
+    return {
+      calls,
+      uta: {
+        id: 'ibkr-paper',
+        planRebalance: async (target: Record<string, unknown>, policy: unknown) => { calls.push({ kind: 'plan', target, policy }); return plan },
+        stageRebalance: async (target: Record<string, unknown>, policy: unknown) => { calls.push({ kind: 'stage', target, policy }); return { plan, staged: 0, suggestedMessage: 'rebalance x' } },
+      },
+    }
+  }
+
+  it('dryRun previews without staging and maps provenance to the target source', async () => {
+    const { uta, calls } = fakeUta()
+    const tools = createTradingTools({ resolveOne: async () => uta } as never)
+    const result = await run(tools.stageRebalance, {
+      source: 'ibkr-paper', strategy: 'equal-weight', strategyVersion: '1', validUntil: '2026-10-10T20:00:00Z',
+      provenance: 'snapshot:abc', weights, cashWeight: '0.05', dryRun: true,
+    }) as Record<string, unknown>
+
+    expect(result).toMatchObject({ source: 'ibkr-paper', plan: { targetId: 'tp-1' } })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({ kind: 'plan', target: { source: 'snapshot:abc', strategy: 'equal-weight', cashWeight: '0.05' } })
+    expect(typeof calls[0].target.decisionAt).toBe('string')
+    expect('provenance' in calls[0].target).toBe(false)
+  })
+
+  it('stages by default and passes minTradeValue as policy', async () => {
+    const { uta, calls } = fakeUta()
+    const tools = createTradingTools({ resolveOne: async () => uta } as never)
+    const result = await run(tools.stageRebalance, {
+      source: 'ibkr-paper', strategy: 'equal-weight', strategyVersion: '1', validUntil: '2026-10-10T20:00:00Z',
+      weights, cashWeight: '0.05', minTradeValue: '200', dryRun: false,
+    }) as Record<string, unknown>
+
+    expect(result).toMatchObject({ source: 'ibkr-paper', suggestedMessage: 'rebalance x' })
+    expect(calls[0]).toMatchObject({ kind: 'stage', policy: { minTradeValue: '200' } })
+  })
+})
+
 describe('searchContracts — data-source participation', () => {
   it('defaults to accounts with UTA data-source participation enabled', async () => {
     const tools = createTradingTools(fakeManager([

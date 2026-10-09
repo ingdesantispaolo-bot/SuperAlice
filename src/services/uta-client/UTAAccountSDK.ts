@@ -43,6 +43,9 @@ import type {
   StageClosePositionParams,
   ExpandContractFilters,
   ContractExpansion,
+  TargetPortfolio,
+  RebalancePolicy,
+  RebalancePlan,
 } from '@traderalice/uta-protocol'
 import type { Contract, ContractDescription, ContractDetails } from '@traderalice/ibkr'
 
@@ -313,6 +316,22 @@ export class UTAAccountSDK {
     return this.client.post<AddResult>(
       `/api/trading/uta/${encodeURIComponent(this.id)}/wallet/stage-place-order`,
       params,
+    )
+  }
+
+  /** Preview the orders that move this account to a target portfolio (stages nothing). */
+  planRebalance(target: TargetPortfolio, policy?: RebalancePolicy): Promise<RebalancePlan> {
+    return this.client.post<RebalancePlan>(
+      `/api/trading/uta/${encodeURIComponent(this.id)}/rebalance/plan`,
+      { target, policy },
+    )
+  }
+
+  /** Stage the planned rebalance orders; commit with the returned suggestedMessage. */
+  stageRebalance(target: TargetPortfolio, policy?: RebalancePolicy): Promise<{ plan: RebalancePlan; staged: number; suggestedMessage: string }> {
+    return this.client.post<{ plan: RebalancePlan; staged: number; suggestedMessage: string }>(
+      `/api/trading/uta/${encodeURIComponent(this.id)}/wallet/stage-rebalance`,
+      { target, policy },
     )
   }
 
