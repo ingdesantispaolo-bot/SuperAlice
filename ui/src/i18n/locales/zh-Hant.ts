@@ -2709,6 +2709,7 @@ export const zhHant: Resources = {
     stagedWarning: '這些操作已經暫存，但還沒有提交訊息。Agent 仍需完成提交後才能推送。',
     approvalWarning: '批准後，這些操作會被推送到券商帳戶。確認前請核對帳戶、方向、數量和訂單類型。',
     result: '已提交 {{submitted}} 項，已拒絕 {{rejected}} 項',
+    unresolvedResult: '{{count}} 項結果未知——確認前將阻止新訂單',
     queue: {
       waitingApproval_one: '{{count}} 個提交等待審批',
       waitingApproval_other: '{{count}} 個提交等待審批',
@@ -2772,6 +2773,7 @@ export const zhHant: Resources = {
       filled: '已成交',
       rejected: '已拒絕',
       userRejected: '使用者已拒絕',
+      unknown: '結果未知',
       cancelled: '已取消',
     },
   },

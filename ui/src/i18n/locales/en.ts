@@ -2741,6 +2741,7 @@ export const en = {
     stagedWarning: 'These operations are staged but do not have a commit message yet. The agent still needs to commit before this can be pushed.',
     approvalWarning: 'Approval pushes these operations to the broker account. Check account, side, quantity, and order type before confirming.',
     result: '{{submitted}} submitted, {{rejected}} rejected',
+    unresolvedResult: '{{count}} with unknown outcome — new orders are blocked until resolved',
     queue: {
       waitingApproval_one: '{{count}} commit waiting for approval',
       waitingApproval_other: '{{count}} commits waiting for approval',
@@ -2804,6 +2805,7 @@ export const en = {
       filled: 'filled',
       rejected: 'rejected',
       userRejected: 'user rejected',
+      unknown: 'outcome unknown',
       cancelled: 'cancelled',
     },
   },

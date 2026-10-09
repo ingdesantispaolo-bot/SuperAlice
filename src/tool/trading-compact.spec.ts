@@ -3,7 +3,7 @@ import Decimal from 'decimal.js'
 import {
   val, money, price,
   compactContract, compactOrderFields, compactOperation,
-  compactResult, compactStatus, compactAccountInfo,
+  compactResult, compactPushResult, compactStatus, compactAccountInfo,
 } from './trading-compact.js'
 
 describe('val — sentinel normalization', () => {
@@ -115,6 +115,19 @@ describe('compactOperation / compactStatus / compactResult', () => {
       staged: [], pendingMessage: 'long ETH', pendingHash: 'h1', head: 'abc', commitCount: 5,
     })
     expect(committed.awaitingApproval).toEqual({ message: 'long ETH', hash: 'h1' })
+  })
+
+  it('surfaces unknown dispatch outcomes only when present', () => {
+    const unresolved = [{ commitHash: 'c1', operationIndex: 0, action: 'placeOrder', symbol: 'AAPL', timestamp: 't' }]
+    const blocked = compactStatus({ staged: [], pendingMessage: null, pendingHash: null, head: 'c1', commitCount: 1, unresolved })
+    expect(blocked.unresolvedOutcomes).toEqual(unresolved)
+
+    const pushed = compactPushResult({
+      hash: 'c1', message: 'buy', operationCount: 1, submitted: [], rejected: [],
+      unresolved: [{ action: 'placeOrder', success: false, status: 'unknown', error: 'ack lost', raw: { noisy: true } }],
+    })
+    expect(pushed.unresolved).toEqual([{ action: 'placeOrder', success: false, status: 'unknown', error: 'ack lost' }])
+    expect('unresolved' in compactPushResult({ hash: 'c2', submitted: [], rejected: [], unresolved: [] })).toBe(false)
   })
 })
 

@@ -2705,6 +2705,7 @@ export const zh: Resources = {
     stagedWarning: '这些操作已经暂存，但还没有提交信息。智能体仍需完成提交后才能推送。',
     approvalWarning: '批准后，这些操作会被推送到券商账户。确认前请核对账户、方向、数量和订单类型。',
     result: '已提交 {{submitted}} 项，已拒绝 {{rejected}} 项',
+    unresolvedResult: '{{count}} 项结果未知——确认前将阻止新订单',
     queue: {
       waitingApproval_one: '{{count}} 个提交等待审批',
       waitingApproval_other: '{{count}} 个提交等待审批',
@@ -2768,6 +2769,7 @@ export const zh: Resources = {
       filled: '已成交',
       rejected: '已拒绝',
       userRejected: '用户已拒绝',
+      unknown: '结果未知',
       cancelled: '已取消',
     },
   },

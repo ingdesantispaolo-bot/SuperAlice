@@ -436,6 +436,8 @@ export interface WalletPushResult {
   operationCount: number
   submitted: Array<{ action: string; success: boolean; orderId?: string; status: string; error?: string }>
   rejected: Array<{ action: string; success: boolean; error?: string; status: string }>
+  /** Dispatched but outcome unknown — the account blocks new writes until resolved. */
+  unresolved?: Array<{ action: string; success: boolean; orderId?: string; error?: string; status: string }>
   /** Demo-only marker: the response exercises the result UI without contacting a broker. */
   simulated?: boolean
 }
@@ -462,7 +464,7 @@ export interface HistoryContract {
   multiplier?: string
 }
 
-export type OrderHistoryStatus = 'submitted' | 'filled' | 'cancelled' | 'rejected' | 'user-rejected'
+export type OrderHistoryStatus = 'submitted' | 'filled' | 'cancelled' | 'rejected' | 'user-rejected' | 'unknown'
 
 export type OrderHistorySource = 'alice' | 'external'
 

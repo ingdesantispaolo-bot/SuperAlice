@@ -1084,6 +1084,7 @@ const ORDER_STATUS_STYLES: Record<OrderHistoryStatus, string> = {
   rejected: 'bg-destructive/15 text-destructive',
   'user-rejected': 'bg-destructive/15 text-destructive',
   submitted: 'bg-primary/15 text-primary',
+  unknown: 'bg-warning/15 text-warning',
 }
 
 const ORDER_HISTORY_COMPACT_WIDTH = 760
