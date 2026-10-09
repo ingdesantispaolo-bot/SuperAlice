@@ -12,7 +12,7 @@ import { Contract, Order, ContractDescription, ContractDetails, UNSET_DECIMAL, U
 import { BrokerError, type IBroker, type AccountInfo, type Position, type OpenOrder, type PlaceOrderResult, type Quote, type MarketClock, type AccountCapabilities, type BrokerHealth, type BrokerHealthInfo, type BrokerConnectionStateEvent, type UTAReach, type UTATier, type TpSlParams, type Bar, type BarParams, type ExpandContractFilters, type ContractExpansion, type SubAccountRef } from './brokers/types.js'
 
 const REACH_RANK: Record<UTAReach, number> = { down: 0, connected: 1, readable: 2 }
-import { TradingGit } from './git/TradingGit.js'
+import { TradingGit, DispatchOutcomeUnknownError } from './git/TradingGit.js'
 import { recomputeCostBasisFromCommits } from './cost-basis.js'
 import { projectOrderHistory, projectTradeHistory } from './order-history.js'
 import type { OrderHistoryEntry, TradeHistoryEntry } from '@traderalice/uta-protocol'
@@ -32,9 +32,23 @@ import type {
   SimulatePriceChangeResult,
   OrderStatusUpdate,
   SyncResult,
+  CommitHash,
+  UnresolvedOperation,
+  ResolveOutcomeParams,
 } from './git/types.js'
 import { createGuardPipeline, resolveGuards } from './guards/index.js'
 import './contract-ext.js'
+
+/** Structured broker refusals that prove the write was not placed. */
+const DEFINITIVE_REFUSAL_CODES: ReadonlySet<string> = new Set(['CONFIG', 'AUTH', 'EXCHANGE', 'MARKET_CLOSED', 'CONNECTING'])
+
+function isDefinitiveBrokerRefusal(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const { name, code } = err as { name?: unknown; code?: unknown }
+  return (err instanceof BrokerError || name === 'BrokerError')
+    && typeof code === 'string'
+    && DEFINITIVE_REFUSAL_CODES.has(code)
+}
 
 // ==================== Options ====================
 
@@ -177,20 +191,38 @@ export class UnifiedTradingAccount {
       }
     }
 
+    // An exception from the broker write itself does not prove the venue
+    // refused it: the request may have been accepted before the answer was
+    // lost. Only a structured, definitive refusal stays a rejection; anything
+    // else is recorded as an unknown outcome that blocks further writes.
+    // Checks that run before the call (read-only, close quantity) still
+    // reject normally — nothing was sent.
+    const sendToBroker = async (write: () => Promise<unknown>): Promise<unknown> => {
+      try {
+        return await write()
+      } catch (err) {
+        if (isDefinitiveBrokerRefusal(err)) throw err
+        throw new DispatchOutcomeUnknownError(
+          `Broker outcome not confirmed: ${err instanceof Error ? err.message : String(err)}`,
+          err,
+        )
+      }
+    }
+
     const dispatcher = async (op: Operation): Promise<unknown> => {
       this._assertCanMutateAccount(op.action)
       switch (op.action) {
         case 'placeOrder':
-          return broker.placeOrder(op.contract, op.order, op.tpsl)
+          return sendToBroker(() => broker.placeOrder(op.contract, op.order, op.tpsl))
         case 'modifyOrder':
-          return broker.modifyOrder(op.orderId, op.changes)
+          return sendToBroker(() => broker.modifyOrder(op.orderId, op.changes))
         case 'closePosition':
           if (op.quantity != null) {
             await this._assertCloseQuantityWithinPosition(op.contract, op.quantity)
           }
-          return broker.closePosition(op.contract, op.quantity)
+          return sendToBroker(() => broker.closePosition(op.contract, op.quantity))
         case 'cancelOrder':
-          return broker.cancelOrder(op.orderId, op.orderCancel)
+          return sendToBroker(() => broker.cancelOrder(op.orderId, op.orderCancel))
         default:
           throw new Error(`Unknown operation action: ${(op as { action: string }).action}`)
       }
@@ -202,6 +234,9 @@ export class UnifiedTradingAccount {
       executeOperation: guardedDispatcher,
       getGitState: this._getState,
       onCommit: options.onCommit,
+      // onCommit persists the export state (see uta-manager); the same store
+      // holds the in-flight dispatch record that makes a crash recoverable.
+      persistInflight: options.onCommit,
     }
 
     this.git = options.savedState
@@ -850,29 +885,36 @@ export class UnifiedTradingAccount {
     // Optional delay — gives exchange APIs time to settle before querying
     if (opts?.delayMs) await new Promise(r => setTimeout(r, opts.delayMs))
 
+    const updates: OrderStatusUpdate[] = []
+
     let candidates = pendingOrders
     if (this.broker.getOpenOrders) {
       const listing = await this._callBroker(() => this.broker.getOpenOrders!())
       const openIds = new Set(listing.map((o) => o.orderId).filter(Boolean))
       // Present in the listing → alive, skip. (A just-placed order missing
       // due to listing lag is also safe: its confirm returns Submitted.)
+      // For an unknown outcome the listing IS the resolving evidence.
+      for (const p of pendingOrders) {
+        if (p.status === 'unknown' && openIds.has(p.orderId)) {
+          updates.push({ orderId: p.orderId, symbol: p.symbol, previousStatus: 'unknown', currentStatus: 'submitted' })
+        }
+      }
       candidates = pendingOrders.filter((p) => !openIds.has(p.orderId))
     } else {
       candidates = pendingOrders.filter((p) => this._pollBackoffDue(p.orderId))
     }
 
-    if (candidates.length === 0) {
-      return { hash: '', updatedCount: 0, updates: [] }
-    }
-
-    const updates: OrderStatusUpdate[] = []
-
-    for (const { orderId, symbol, localSymbol } of candidates) {
+    for (const { orderId, symbol, localSymbol, status: knownStatus } of candidates) {
       const brokerOrder = await this._callBroker(() => this.broker.getOrder(orderId, localSymbol))
+      // Absence is not evidence: an unknown outcome stays unknown.
       if (!brokerOrder) continue
 
       const status = brokerOrder.orderState.status
-      if (status !== 'Submitted' && status !== 'PreSubmitted') {
+      if (status === 'Submitted' || status === 'PreSubmitted') {
+        if (knownStatus === 'unknown') {
+          updates.push({ orderId, symbol, previousStatus: 'unknown', currentStatus: 'submitted' })
+        }
+      } else {
         // Extract fill data when available — `.toFixed()` (not
         // `.toNumber()`) so sub-satoshi qty (OKX-style accounting)
         // round-trips into the persisted git operation record without
@@ -898,7 +940,7 @@ export class UnifiedTradingAccount {
         updates.push({
           orderId,
           symbol,
-          previousStatus: 'submitted',
+          previousStatus: knownStatus,
           currentStatus,
           filledQty,
           filledPrice: brokerOrder.avgFillPrice,
@@ -914,8 +956,22 @@ export class UnifiedTradingAccount {
     return this.git.sync(updates, state)
   }
 
-  getPendingOrderIds(): Array<{ orderId: string; symbol: string; localSymbol?: string }> {
+  getPendingOrderIds(): Array<{ orderId: string; symbol: string; localSymbol?: string; status: 'submitted' | 'unknown' }> {
     return this.git.getPendingOrderIds()
+  }
+
+  /** Operations with an unknown dispatch outcome; non-empty blocks new writes. */
+  getUnresolved(): UnresolvedOperation[] {
+    return this.git.getUnresolved()
+  }
+
+  /**
+   * Record the operator's evidence-backed resolution of an unknown outcome
+   * (broker order/fill history checked). Human decision — not exposed as an
+   * AI tool, same as push.
+   */
+  async resolveOutcome(params: ResolveOutcomeParams): Promise<CommitHash> {
+    return this.git.resolveOutcome(params)
   }
 
   /** Exchange-frontend projection — same translation the UI and routes use. */
@@ -1051,9 +1107,11 @@ export class UnifiedTradingAccount {
     // belongs to sync; reconcile only what no pending order can explain.
     // True residuals (fee-in-kind dust, external transfers racing an open
     // order) get reconciled on the next pass after the order settles.
-    const inFlight = new Set(
-      this.git.getPendingOrderIds().map((p) => p.aliceId).filter(Boolean),
-    )
+    // An unknown outcome is in flight too: its drift may be that very order.
+    const inFlight = new Set([
+      ...this.git.getPendingOrderIds().map((p) => p.aliceId),
+      ...this.git.getUnresolved().map((u) => u.aliceId),
+    ].filter(Boolean))
 
     for (const p of walletPositions) {
       const aliceId = p.contract.aliceId

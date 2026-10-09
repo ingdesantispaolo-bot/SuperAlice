@@ -52,10 +52,31 @@ export type Operation =
       quantityDelta: string
       markPrice: string
     }
+  | {
+      // Explicit, evidence-backed resolution of an earlier operation whose
+      // dispatch outcome was 'unknown'. Appended as its own commit — the
+      // original commit is never rewritten. `original` is a copy of the
+      // unresolved operation so projections (pending scan, cost basis, order
+      // history) attribute the resolved order exactly as if it had been
+      // acknowledged — see `effectiveOperation`.
+      action: 'resolveOutcome'
+      commitHash: CommitHash
+      operationIndex: number
+      outcome: 'not-placed' | 'placed'
+      note: string
+      original: Operation
+    }
 
 // ==================== Operation Result ====================
 
-export type OperationStatus = 'submitted' | 'filled' | 'rejected' | 'cancelled' | 'user-rejected'
+/**
+ * `unknown` — the request may have reached the broker but no definitive
+ * answer came back (lost acknowledgement, timeout after send, process stopped
+ * mid-dispatch). It is NOT a rejection: the order may be live or filled.
+ * The account blocks new writes until the outcome is resolved from broker
+ * evidence (sync by orderId) or by an explicit `resolveOutcome` commit.
+ */
+export type OperationStatus = 'submitted' | 'filled' | 'rejected' | 'cancelled' | 'user-rejected' | 'unknown'
 
 export interface OperationResult {
   action: OperationAction
@@ -122,6 +143,38 @@ export interface PushResult {
   operationCount: number
   submitted: OperationResult[]
   rejected: OperationResult[]
+  /** Dispatched operations whose outcome is unknown — neither submitted nor
+   *  rejected. The account blocks new writes until they are resolved. */
+  unresolved: OperationResult[]
+}
+
+/** An operation whose dispatch outcome is still unknown. */
+export interface UnresolvedOperation {
+  commitHash: CommitHash
+  operationIndex: number
+  action: OperationAction
+  symbol: string
+  aliceId?: string
+  /** Broker order id when the adapter knew it before the outcome was lost. */
+  orderId?: string
+  error?: string
+  timestamp: string
+}
+
+export interface ResolveOutcomeParams {
+  commitHash: CommitHash
+  operationIndex: number
+  /** `not-placed`: broker evidence shows the request never became an order.
+   *  `placed`: broker evidence shows it did — requires `orderId` (sync then
+   *  tracks it) or both `filledQty` and `filledPrice` (recorded once). */
+  outcome: 'not-placed' | 'placed'
+  orderId?: string
+  /** Decimal as string. */
+  filledQty?: string
+  /** Decimal as string. */
+  filledPrice?: string
+  /** What evidence was checked (broker order/fill history, positions). Required. */
+  note: string
 }
 
 export interface RejectResult {
@@ -136,6 +189,8 @@ export interface GitStatus {
   pendingHash: CommitHash | null
   head: CommitHash | null
   commitCount: number
+  /** Non-empty → new writes are refused until each entry is resolved. */
+  unresolved: UnresolvedOperation[]
 }
 
 export interface OperationSummary {
@@ -171,6 +226,23 @@ export interface CommitLogEntry {
 export interface GitExportState {
   commits: GitCommit[]
   head: CommitHash | null
+  /** Present only while a push is dispatching. Persisted before each broker
+   *  call so a crash leaves durable evidence; on restore it becomes a commit
+   *  whose interrupted operation is `unknown`. */
+  inflight?: InflightPush
+}
+
+export interface InflightPush {
+  hash: CommitHash
+  parentHash: CommitHash | null
+  message: string
+  operations: Operation[]
+  /** Results of the operations that completed, in order. */
+  results: OperationResult[]
+  /** Index of the operation handed to the broker most recently. */
+  dispatchIndex: number
+  startedAt: string
+  round?: number
 }
 
 // ==================== Sync ====================
@@ -318,5 +390,14 @@ export function getOperationSymbol(op: Operation | undefined): string {
     case 'syncOrders': return 'unknown'
     case 'observeExternalOrder': return op.contract?.symbol || op.contract?.aliceId || 'unknown'
     case 'reconcileBalance': return op.aliceId
+    case 'resolveOutcome': return getOperationSymbol(op.original)
   }
+}
+
+/** The operation whose order/contract semantics a result belongs to: a
+ *  `resolveOutcome` stands in for the operation it resolves. */
+export function effectiveOperation(op: Operation): Operation
+export function effectiveOperation(op: Operation | undefined): Operation | undefined
+export function effectiveOperation(op: Operation | undefined): Operation | undefined {
+  return op?.action === 'resolveOutcome' ? op.original : op
 }

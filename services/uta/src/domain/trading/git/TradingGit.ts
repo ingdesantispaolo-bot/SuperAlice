@@ -28,8 +28,11 @@ import type {
   SimulatePriceChangeResult,
   OrderStatusUpdate,
   SyncResult,
+  InflightPush,
+  UnresolvedOperation,
+  ResolveOutcomeParams,
 } from './types.js'
-import { getOperationSymbol } from './types.js'
+import { getOperationSymbol, effectiveOperation } from './types.js'
 
 /** secTypes whose price does NOT track the underlying 1:1 — excluded from
  *  symbol-level price simulation (they share the underlying's symbol). */
@@ -58,11 +61,68 @@ export function isPendingHashConflict(error: unknown): boolean {
     || (error as { name?: unknown }).name === 'PendingHashConflictError'
 }
 
+/**
+ * Thrown by an `executeOperation` implementation when the request was handed
+ * to the broker but its outcome could not be confirmed (lost acknowledgement,
+ * transport failure after send). Recorded as status `unknown`, never
+ * `rejected` — a rejection invites a retry, and a retry can double an order.
+ */
+export class DispatchOutcomeUnknownError extends Error {
+  readonly code = 'DISPATCH_OUTCOME_UNKNOWN' as const
+
+  constructor(message: string, cause?: unknown) {
+    super(message)
+    this.name = 'DispatchOutcomeUnknownError'
+    if (cause !== undefined) this.cause = cause
+  }
+}
+
+export function isDispatchOutcomeUnknown(error: unknown): boolean {
+  if (error instanceof DispatchOutcomeUnknownError) return true
+  if (!error || typeof error !== 'object') return false
+  return (error as { code?: unknown }).code === 'DISPATCH_OUTCOME_UNKNOWN'
+}
+
+/** New writes refused while an earlier operation's outcome is unknown. */
+export class UnresolvedOutcomeError extends Error {
+  readonly code = 'UNRESOLVED_OUTCOME' as const
+  readonly unresolved: UnresolvedOperation[]
+
+  constructor(unresolved: UnresolvedOperation[]) {
+    const list = unresolved
+      .map((u) => `${u.commitHash}#${u.operationIndex} ${u.action} ${u.symbol}${u.orderId ? ` (order ${u.orderId})` : ''}`)
+      .join(', ')
+    super(
+      `Account has ${unresolved.length} operation(s) with unknown outcome: ${list}. ` +
+      'New writes are blocked until each is resolved from broker evidence (sync, or an explicit resolveOutcome).',
+    )
+    this.name = 'UnresolvedOutcomeError'
+    this.unresolved = unresolved
+  }
+}
+
+export function isUnresolvedOutcome(error: unknown): boolean {
+  if (error instanceof UnresolvedOutcomeError) return true
+  if (!error || typeof error !== 'object') return false
+  return (error as { code?: unknown }).code === 'UNRESOLVED_OUTCOME'
+}
+
+const EMPTY_GIT_STATE: GitState = {
+  netLiquidation: '0',
+  totalCashValue: '0',
+  unrealizedPnL: '0',
+  realizedPnL: '0',
+  positions: [],
+  pendingOrders: [],
+}
+
 export class TradingGit implements ITradingGit {
   private stagingArea: Operation[] = []
   private pendingMessage: string | null = null
   private pendingHash: CommitHash | null = null
   private inflightWrite = false
+  /** Durable record of the push being dispatched (see GitExportState.inflight). */
+  private inflight: InflightPush | null = null
   private commits: GitCommit[] = []
   private head: CommitHash | null = null
   private currentRound: number | undefined = undefined
@@ -83,6 +143,7 @@ export class TradingGit implements ITradingGit {
         'A commit is awaiting approval. Push or reject it before staging more operations.',
       )
     }
+    this.assertNoUnresolved()
     this.stagingArea.push(operation)
     return {
       staged: true,
@@ -118,6 +179,7 @@ export class TradingGit implements ITradingGit {
 
   async push(expectedPendingHash: string): Promise<PushResult> {
     this.assertPrepared('push')
+    this.assertNoUnresolved()
     this.beginWrite(expectedPendingHash)
     try {
       return await this.executePush()
@@ -138,9 +200,41 @@ export class TradingGit implements ITradingGit {
     const message = this.pendingMessage
     const hash = this.pendingHash
 
-    // Execute all operations
-    const results: OperationResult[] = []
-    for (const op of operations) {
+    // Durable intent: persisted before every broker call, so a crash between
+    // dispatch and the final commit leaves evidence that restore() turns
+    // into an `unknown` result instead of silently forgetting the order.
+    const inflight: InflightPush = {
+      hash,
+      parentHash: this.head,
+      message,
+      operations,
+      results: [],
+      dispatchIndex: -1,
+      startedAt: new Date().toISOString(),
+      round: this.currentRound,
+    }
+    this.inflight = inflight
+    const results = inflight.results
+
+    for (let i = 0; i < operations.length; i++) {
+      const op = operations[i]
+      inflight.dispatchIndex = i
+      try {
+        await this.persistInflightState()
+      } catch (error) {
+        // Without a durable record we cannot recover this dispatch after a
+        // crash — do not send it, nor anything after it.
+        const reason = error instanceof Error ? error.message : String(error)
+        for (let j = i; j < operations.length; j++) {
+          results.push({
+            action: operations[j].action,
+            success: false,
+            status: 'rejected',
+            error: `not dispatched: could not persist dispatch intent (${reason})`,
+          })
+        }
+        break
+      }
       try {
         const raw = await this.config.executeOperation(op)
         results.push(this.parseOperationResult(op, raw))
@@ -148,40 +242,223 @@ export class TradingGit implements ITradingGit {
         results.push({
           action: op.action,
           success: false,
-          status: 'rejected',
+          status: isDispatchOutcomeUnknown(error) ? 'unknown' : 'rejected',
           error: error instanceof Error ? error.message : String(error),
         })
       }
+      // Best effort: the next pre-dispatch persist is the gate.
+      await this.persistInflightState().catch(() => {})
     }
 
-    // Snapshot state after execution
-    const stateAfter = await this.config.getGitState()
+    // Snapshot state after execution. A failing read must not lose the
+    // results of operations already sent (the staging area would survive
+    // and a second push would dispatch them again).
+    const stateAfter = await this.readGitStateOrLast()
 
     const commit: GitCommit = {
       hash,
-      parentHash: this.head,
+      parentHash: inflight.parentHash,
       message,
       operations,
       results,
       stateAfter,
       timestamp: new Date().toISOString(),
-      round: this.currentRound,
+      round: inflight.round,
     }
 
     this.commits.push(commit)
     this.head = hash
+    this.inflight = null
 
-    await this.config.onCommit?.(this.exportState())
-
-    // Clear staging
+    // Clear staging before persisting: once dispatched, never re-pushable.
     this.stagingArea = []
     this.pendingMessage = null
     this.pendingHash = null
 
-    const rejected = results.filter((r) => !r.success)
+    await this.persist()
+
+    const unresolved = results.filter((r) => r.status === 'unknown')
+    const rejected = results.filter((r) => !r.success && r.status !== 'unknown')
     const submitted = results.filter((r) => r.success)
 
-    return { hash, message, operationCount: operations.length, submitted, rejected }
+    return { hash, message, operationCount: operations.length, submitted, rejected, unresolved }
+  }
+
+  private async persist(): Promise<void> {
+    await this.config.onCommit?.(this.exportState())
+  }
+
+  private async persistInflightState(): Promise<void> {
+    await this.config.persistInflight?.(this.exportState())
+  }
+
+  private async readGitStateOrLast(): Promise<GitState> {
+    try {
+      return await this.config.getGitState()
+    } catch {
+      return this.commits.at(-1)?.stateAfter ?? EMPTY_GIT_STATE
+    }
+  }
+
+  private assertNoUnresolved(): void {
+    const unresolved = this.getUnresolved()
+    if (unresolved.length > 0) throw new UnresolvedOutcomeError(unresolved)
+  }
+
+  // ==================== Unknown outcomes ====================
+
+  /**
+   * Operations whose dispatch outcome is still unknown. An `unknown` result
+   * is resolved by later broker evidence for the same orderId (a sync row),
+   * or by an explicit `resolveOutcome` commit referencing it. Transport
+   * health alone never resolves it.
+   */
+  getUnresolved(): UnresolvedOperation[] {
+    const latestByOrderId = new Map<string, OperationStatus>()
+    const resolvedRefs = new Set<string>()
+    for (let i = this.commits.length - 1; i >= 0; i--) {
+      const commit = this.commits[i]
+      for (const result of commit.results) {
+        if (result.orderId && !latestByOrderId.has(result.orderId)) {
+          latestByOrderId.set(result.orderId, result.status)
+        }
+      }
+      for (const op of commit.operations) {
+        if (op.action === 'resolveOutcome') resolvedRefs.add(`${op.commitHash}#${op.operationIndex}`)
+      }
+    }
+
+    const unresolved: UnresolvedOperation[] = []
+    for (const commit of this.commits) {
+      commit.results.forEach((result, index) => {
+        if (result.status !== 'unknown') return
+        if (resolvedRefs.has(`${commit.hash}#${index}`)) return
+        if (result.orderId && latestByOrderId.get(result.orderId) !== 'unknown') return
+        const op = effectiveOperation(commit.operations[index] ?? commit.operations[0])
+        const aliceId = op && 'contract' in op ? op.contract?.aliceId || undefined : undefined
+        unresolved.push({
+          commitHash: commit.hash,
+          operationIndex: index,
+          action: op?.action ?? result.action,
+          symbol: result.symbol || getOperationSymbol(op),
+          ...(aliceId && { aliceId }),
+          ...(result.orderId && { orderId: result.orderId }),
+          ...(result.error && { error: result.error }),
+          timestamp: commit.timestamp,
+        })
+      })
+    }
+    return unresolved
+  }
+
+  /**
+   * Record an explicit, evidence-backed resolution of an `unknown` outcome
+   * as its own commit. `placed` needs an orderId (sync then tracks the
+   * order to its terminal state) or the fill quantity and price observed at
+   * the broker (recorded once). The original commit is never rewritten.
+   */
+  async resolveOutcome(params: ResolveOutcomeParams): Promise<CommitHash> {
+    if (this.inflightWrite) {
+      throw new PendingHashConflictError('A wallet write is already in progress')
+    }
+    // Serialize with push/reject and with a concurrent resolution of the same
+    // operation (the state read below yields; without this both could pass
+    // the lookup and append two resolutions).
+    this.inflightWrite = true
+    try {
+      return await this.executeResolveOutcome(params)
+    } finally {
+      this.inflightWrite = false
+    }
+  }
+
+  private async executeResolveOutcome(params: ResolveOutcomeParams): Promise<CommitHash> {
+    const target = this.getUnresolved().find(
+      (u) => u.commitHash === params.commitHash && u.operationIndex === params.operationIndex,
+    )
+    if (!target) {
+      throw new Error(`resolveOutcome: no unresolved operation ${params.commitHash}#${params.operationIndex}`)
+    }
+    const note = params.note?.trim()
+    if (!note) {
+      throw new Error('resolveOutcome: a note describing the broker evidence is required')
+    }
+    if (params.orderId && target.orderId && params.orderId !== target.orderId) {
+      throw new Error(
+        `resolveOutcome: orderId ${params.orderId} does not match the order ${target.orderId} recorded for this operation`,
+      )
+    }
+
+    const original = this.commits.find((c) => c.hash === params.commitHash)!.operations[params.operationIndex]
+    const orderId = params.orderId ?? target.orderId
+    let result: OperationResult
+    if (params.outcome === 'not-placed') {
+      result = {
+        action: 'resolveOutcome',
+        success: false,
+        status: 'rejected',
+        error: `resolved as not placed: ${note}`,
+        ...(orderId && { orderId }),
+        symbol: target.symbol,
+      }
+    } else if (params.orderId) {
+      result = { action: 'resolveOutcome', success: true, status: 'submitted', orderId: params.orderId, symbol: target.symbol }
+    } else {
+      const qty = this.parsePositiveDecimal(params.filledQty, 'filledQty')
+      const price = this.parsePositiveDecimal(params.filledPrice, 'filledPrice')
+      if (!qty || !price) {
+        throw new Error('resolveOutcome: outcome "placed" requires orderId, or both filledQty and filledPrice')
+      }
+      result = {
+        action: 'resolveOutcome',
+        success: true,
+        status: 'filled',
+        filledQty: qty.toFixed(),
+        filledPrice: price.toFixed(),
+        ...(orderId && { orderId }),
+        symbol: target.symbol,
+      }
+    }
+
+    const operation: Operation = {
+      action: 'resolveOutcome',
+      commitHash: params.commitHash,
+      operationIndex: params.operationIndex,
+      outcome: params.outcome,
+      note,
+      original,
+    }
+    const message = `[resolve] ${params.commitHash}#${params.operationIndex} ${params.outcome}: ${note}`
+    const timestamp = new Date().toISOString()
+    const hash = generateCommitHash({ message, operations: [operation], timestamp, parentHash: this.head })
+
+    this.commits.push({
+      hash,
+      parentHash: this.head,
+      message,
+      operations: [operation],
+      results: [result],
+      stateAfter: await this.readGitStateOrLast(),
+      timestamp,
+      round: this.currentRound,
+    })
+    this.head = hash
+    await this.persist()
+    return hash
+  }
+
+  private parsePositiveDecimal(value: string | undefined, field: string): Decimal | null {
+    if (value == null || value === '') return null
+    let parsed: Decimal
+    try {
+      parsed = new Decimal(value)
+    } catch {
+      throw new Error(`resolveOutcome: ${field} must be a positive decimal string`)
+    }
+    if (!parsed.isFinite() || parsed.lte(0)) {
+      throw new Error(`resolveOutcome: ${field} must be a positive decimal string`)
+    }
+    return parsed
   }
 
   async reject(reason: string | undefined, expectedPendingHash: string): Promise<RejectResult> {
@@ -520,6 +797,9 @@ export class TradingGit implements ITradingGit {
         const direction = delta.gte(0) ? 'observed' : 'released'
         return `${direction} ${delta.abs().toFixed()} @${op.markPrice}`
       }
+
+      case 'resolveOutcome':
+        return `resolved ${op.commitHash}#${op.operationIndex} → ${op.outcome} (${result?.status || 'unknown'})`
     }
   }
 
@@ -540,6 +820,7 @@ export class TradingGit implements ITradingGit {
       pendingHash: this.pendingHash,
       head: this.head,
       commitCount: this.commits.length,
+      unresolved: this.getUnresolved(),
     }
   }
 
@@ -552,6 +833,9 @@ export class TradingGit implements ITradingGit {
     }
     if (op.action === 'modifyOrder') {
       return { ...op, changes: OrderHelper.toWire(op.changes) as unknown as Partial<Order> }
+    }
+    if (op.action === 'resolveOutcome') {
+      return { ...op, original: this.projectOperation(op.original) }
     }
     return op
   }
@@ -566,6 +850,13 @@ export class TradingGit implements ITradingGit {
     return {
       commits: this.commits.map((c) => this.projectCommit(c)),
       head: this.head,
+      ...(this.inflight && {
+        inflight: {
+          ...this.inflight,
+          operations: this.inflight.operations.map((op) => this.projectOperation(op)),
+          results: [...this.inflight.results],
+        },
+      }),
     }
   }
 
@@ -573,7 +864,49 @@ export class TradingGit implements ITradingGit {
     const git = new TradingGit(config)
     git.commits = state.commits.map(TradingGit.rehydrateCommit)
     git.head = state.head
+    if (state.inflight) git.recoverInterruptedPush(state.inflight)
     return git
+  }
+
+  /**
+   * A persisted `inflight` record means the process stopped while a push was
+   * dispatching. Turn it into the commit that push would have written: the
+   * operation that was being sent is `unknown` (it may have reached the
+   * broker), later ones were never sent. Deterministic — restoring the same
+   * file twice yields the same commit — and never re-dispatches anything.
+   */
+  private recoverInterruptedPush(inflight: InflightPush): void {
+    if (this.commits.some((c) => c.hash === inflight.hash)) return
+
+    const operations = inflight.operations.map(TradingGit.rehydrateOperation)
+    const results: OperationResult[] = [...inflight.results]
+    for (let i = results.length; i < operations.length; i++) {
+      results.push(i === inflight.dispatchIndex
+        ? {
+            action: operations[i].action,
+            success: false,
+            status: 'unknown',
+            error: 'process stopped while this operation was being dispatched; broker outcome not confirmed',
+          }
+        : {
+            action: operations[i].action,
+            success: false,
+            status: 'rejected',
+            error: 'not dispatched: process stopped before this operation',
+          })
+    }
+
+    this.commits.push({
+      hash: inflight.hash,
+      parentHash: inflight.parentHash,
+      message: `${inflight.message} [recovered: process stopped during push]`,
+      operations,
+      results,
+      stateAfter: this.commits.at(-1)?.stateAfter ?? EMPTY_GIT_STATE,
+      timestamp: inflight.startedAt,
+      round: inflight.round,
+    })
+    this.head = inflight.hash
   }
 
   /** Rehydrate Decimal fields lost during JSON round-trip. */
@@ -598,6 +931,8 @@ export class TradingGit implements ITradingGit {
           ...op,
           quantity: op.quantity != null ? new Decimal(String(op.quantity)) : op.quantity,
         }
+      case 'resolveOutcome':
+        return { ...op, original: TradingGit.rehydrateOperation(op.original) }
       default:
         return op
     }
@@ -689,11 +1024,12 @@ export class TradingGit implements ITradingGit {
     return { hash, updatedCount: updates.length, updates }
   }
 
-  getPendingOrderIds(): Array<{ orderId: string; symbol: string; localSymbol?: string; aliceId?: string }> {
+  getPendingOrderIds(): Array<{ orderId: string; symbol: string; localSymbol?: string; aliceId?: string; status: 'submitted' | 'unknown' }> {
     // Scan newest→oldest to find latest known status per orderId.
     // Bracket TP/SL legs ride in result.legs — born 'submitted'; any later
     // sync row for a leg lives in a newer commit and wins (first-seen-wins
-    // over a newest-first scan).
+    // over a newest-first scan). An 'unknown' result that carries an
+    // orderId is pending too: sync resolves it from the broker's answer.
     const orderStatus = new Map<string, string>()
 
     for (let i = this.commits.length - 1; i >= 0; i--) {
@@ -708,7 +1044,7 @@ export class TradingGit implements ITradingGit {
     }
 
     // Collect orders still pending
-    const pending: Array<{ orderId: string; symbol: string; localSymbol?: string; aliceId?: string }> = []
+    const pending: Array<{ orderId: string; symbol: string; localSymbol?: string; aliceId?: string; status: 'submitted' | 'unknown' }> = []
     const seen = new Set<string>()
 
     for (const commit of this.commits) {
@@ -717,7 +1053,7 @@ export class TradingGit implements ITradingGit {
         // Sync commits store ONE syncOrders op with N per-order results —
         // operations[j] is undefined past index 0 (a multi-update sync
         // commit in the journal turned this into a BOOT-LOOP crash once).
-        const op = commit.operations[j] ?? commit.operations[0]
+        const op = effectiveOperation(commit.operations[j] ?? commit.operations[0])
         const symbol = getOperationSymbol(op)
         // Broker-native symbol for symbol-scoped order lookups (CCXT).
         // Persisted with the operation, so it survives process restarts
@@ -733,12 +1069,14 @@ export class TradingGit implements ITradingGit {
           ...(result.legs ?? []).map((l) => l.orderId),
         ]
         for (const orderId of candidates) {
-          if (seen.has(orderId) || orderStatus.get(orderId) !== 'submitted') continue
+          const status = orderStatus.get(orderId)
+          if (seen.has(orderId) || (status !== 'submitted' && status !== 'unknown')) continue
           pending.push({
             orderId,
             symbol,
             ...(localSymbol && { localSymbol }),
             ...(aliceId && { aliceId }),
+            status,
           })
           seen.add(orderId)
         }
@@ -940,6 +1278,18 @@ export class TradingGit implements ITradingGit {
     }
 
     const success = rawObj.success === true
+
+    if (!success && rawObj.outcomeUnknown === true) {
+      const orderId = rawObj.orderId as string | undefined
+      return {
+        action: op.action,
+        success: false,
+        status: 'unknown',
+        ...(orderId && { orderId }),
+        error: (rawObj.error as string) ?? 'Broker outcome not confirmed',
+        raw,
+      }
+    }
 
     if (!success) {
       return {

@@ -833,6 +833,7 @@
     "files": [
       "tests/integration/uta-simulation/trading-tools.spec.ts",
       "tests/integration/uta-simulation/UnifiedTradingAccount.spec.ts",
+      "tests/integration/uta-simulation/unknown-outcome.spec.ts",
       "tests/integration/uta-simulation/uta-health.spec.ts",
       "tests/integration/uta-simulation/uta-manager.spec.ts",
       "tests/integration/uta-simulation/order-sync-poller.spec.ts",

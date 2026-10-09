@@ -177,6 +177,13 @@ export interface PlaceOrderResult {
   orderState?: OrderState
   /** Bracket TP/SL child orders created by this placement, if any. */
   legs?: PlaceOrderLeg[]
+  /**
+   * Set with `success: false` when the request was handed to the venue but
+   * no definitive answer arrived (acknowledgement timeout, disconnect after
+   * send). The order may exist: callers must reconcile — by `orderId` when
+   * present — and must not treat this as a rejection or retry it blindly.
+   */
+  outcomeUnknown?: boolean
 }
 
 // ==================== Contract expansion (hub → leaves) ====================
