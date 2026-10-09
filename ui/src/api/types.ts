@@ -422,6 +422,8 @@ export interface WalletStatus {
   pendingHash?: string | null
   head: string | null
   commitCount: number
+  /** Operations whose broker outcome is unknown; non-empty → new writes are blocked. */
+  unresolved?: Array<{ commitHash: string; operationIndex: number; action: string; symbol: string; orderId?: string; error?: string; timestamp: string }>
 }
 
 export interface WalletRejectResult {

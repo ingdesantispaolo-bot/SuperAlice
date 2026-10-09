@@ -260,3 +260,32 @@ describe('PushApprovalPanel localization', () => {
     await waitFor(() => expect(document.activeElement).toBe(queueRow))
   })
 })
+
+describe('PushApprovalPanel unknown dispatch outcomes', () => {
+  it('flags the queue as blocked and the commit as outcome unknown, never as a clean push', async () => {
+    await i18n.changeLanguage('en')
+    mocks.walletStatus.mockResolvedValue({
+      staged: [],
+      pendingMessage: null,
+      head: '3f9a1c2e',
+      commitCount: 1,
+      unresolved: [{ commitHash: '3f9a1c2e', operationIndex: 0, action: 'placeOrder', symbol: 'MSFT', timestamp: '2026-10-09T10:00:00.000Z' }],
+    })
+    mocks.walletLog.mockResolvedValue({
+      commits: [{
+        hash: '3f9a1c2e',
+        parentHash: null,
+        message: 'Add MSFT',
+        timestamp: '2026-10-09T10:00:00.000Z',
+        operations: [{ symbol: 'MSFT', action: 'placeOrder', change: 'BUY 10 MKT (unknown)', status: 'unknown', order: { side: 'BUY', orderType: 'MKT', totalQuantity: '10' } }],
+      }],
+    })
+
+    render(<PushApprovalPanel />)
+
+    expect((await screen.findAllByText('Blocked: 1 unknown outcome(s)')).length).toBeGreaterThan(0)
+    expect(screen.queryByText('Working tree clean')).toBeNull()
+    expect((await screen.findAllByText('Outcome unknown')).length).toBeGreaterThan(0)
+    expect(screen.getByText('outcome unknown')).toBeTruthy()
+  })
+})

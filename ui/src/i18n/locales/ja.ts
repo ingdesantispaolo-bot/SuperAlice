@@ -2710,6 +2710,7 @@ export const ja: Resources = {
       stagedWaiting_one: 'コミット待ちのステージ済みセット {{count}} 件',
       stagedWaiting_other: 'コミット待ちのステージ済みセット {{count}} 件',
       clean: '作業ツリーはクリーン',
+      blocked: 'ブロック中：結果不明 {{count}} 件',
       needs: '要承認',
       staged: 'ステージ済み',
       pushed: 'プッシュ済み',
@@ -2732,6 +2733,7 @@ export const ja: Resources = {
     },
     status: {
       needsApproval: '承認が必要',
+      outcomeUnknown: '結果不明',
       staged: 'ステージ済み',
       pushed: 'プッシュ済み',
     },
