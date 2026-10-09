@@ -46,6 +46,23 @@ import { RequestBridge } from './request-bridge.js'
 import { resolveSymbol } from './ibkr-contracts.js'
 import type { IbkrBrokerConfig } from './ibkr-types.js'
 
+/**
+ * Result for a write that failed. Before the request reached TWS the failure
+ * is definitive. After it was sent, only IBKR's own refusal for that orderId
+ * (classified EXCHANGE / AUTH) proves nothing is live; a timeout, a dropped
+ * connection or an unclassified message leaves the outcome unknown — the
+ * orderId is kept so sync can look the order up instead of re-sending it.
+ */
+function writeFailure(err: unknown, sentOrderId: number | null): PlaceOrderResult {
+  const error = err instanceof Error ? err.message : String(err)
+  if (sentOrderId === null) return { success: false, error }
+  const code = err instanceof BrokerError ? err.code : undefined
+  if (code === 'EXCHANGE' || code === 'AUTH') {
+    return { success: false, orderId: String(sentOrderId), error }
+  }
+  return { success: false, outcomeUnknown: true, orderId: String(sentOrderId), error }
+}
+
 const WRITE_LIVENESS_TIMEOUT_MS = 3_000
 const OPTION_MARK_SUCCESS_TTL_MS = 15_000
 const OPTION_MARK_FAILURE_TTL_MS = 60_000
@@ -488,12 +505,15 @@ export class IbkrBroker implements IBroker {
         error: 'IBKR attached TP/SL (bracket) is not implemented yet — refusing to place a naked entry. Place the entry first, then a standalone STP/LMT protective order.',
       }
     }
+    let sentOrderId: number | null = null
     try {
       this._ensureAlive()
       const routedContract = await this.resolveRoutableContract(contract)
       await this._ensureWriteAlive()
       const orderId = this.bridge.getNextOrderId()
       const promise = this.bridge.requestOrder(orderId)
+      promise.catch(() => {}) // a synchronous send failure must not leave an unhandled rejection
+      sentOrderId = orderId
       this.client.placeOrder(orderId, routedContract, order)
       const result = await promise
       return {
@@ -502,11 +522,12 @@ export class IbkrBroker implements IBroker {
         orderState: result.orderState,
       }
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) }
+      return writeFailure(err, sentOrderId)
     }
   }
 
   async modifyOrder(orderId: string, changes: Partial<Order>): Promise<PlaceOrderResult> {
+    let sentOrderId: number | null = null
     try {
       this._ensureAlive()
       // IBKR modifies orders by re-calling placeOrder with the same orderId
@@ -529,6 +550,8 @@ export class IbkrBroker implements IBroker {
       await this._ensureWriteAlive()
       const numericId = parseInt(orderId, 10)
       const promise = this.bridge.requestOrder(numericId)
+      promise.catch(() => {})
+      sentOrderId = numericId
       this.client.placeOrder(numericId, routedContract, mergedOrder)
       const result = await promise
 
@@ -538,15 +561,18 @@ export class IbkrBroker implements IBroker {
         orderState: result.orderState,
       }
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) }
+      return writeFailure(err, sentOrderId)
     }
   }
 
   async cancelOrder(orderId: string, orderCancel?: OrderCancel): Promise<PlaceOrderResult> {
+    let sentOrderId: number | null = null
     try {
       await this._ensureWriteAlive()
       const numericId = parseInt(orderId, 10)
       const promise = this.bridge.requestOrder(numericId)
+      promise.catch(() => {})
+      sentOrderId = numericId
       this.client.cancelOrder(numericId, orderCancel ?? new OrderCancel())
       await promise
 
@@ -554,7 +580,7 @@ export class IbkrBroker implements IBroker {
       os.status = 'Cancelled'
       return { success: true, orderId, orderState: os }
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) }
+      return writeFailure(err, sentOrderId)
     }
   }
 
