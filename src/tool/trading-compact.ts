@@ -179,11 +179,15 @@ export function compactStatus(status: unknown): AnyRec {
   // exchange) — at the agent boundary the committed-not-pushed state is
   // named what it is: awaiting approval.
   const msg = k['pendingMessage']
+  const unresolved = Array.isArray(k['unresolved']) ? k['unresolved'] : []
   return {
     staged: Array.isArray(k['staged']) ? k['staged'].map(compactOperation) : [],
     awaitingApproval: msg ? { message: msg, hash: k['pendingHash'] ?? null } : null,
     head: k['head'] ?? null,
     commitCount: k['commitCount'],
+    // Present only when writes are blocked: each entry needs the operator
+    // to resolve it from broker evidence before anything new is sent.
+    ...(unresolved.length > 0 && { unresolvedOutcomes: unresolved }),
   }
 }
 
@@ -208,6 +212,9 @@ export function compactPushResult(r: unknown): AnyRec {
     operationCount: k['operationCount'],
     submitted: Array.isArray(k['submitted']) ? k['submitted'].map(compactResult) : [],
     rejected: Array.isArray(k['rejected']) ? k['rejected'].map(compactResult) : [],
+    // Outcome unknown: the order may be live. Never retry these — the account
+    // refuses new writes until the operator resolves them.
+    ...(Array.isArray(k['unresolved']) && k['unresolved'].length > 0 && { unresolved: k['unresolved'].map(compactResult) }),
   }
 }
 

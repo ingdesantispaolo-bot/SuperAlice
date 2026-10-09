@@ -268,7 +268,9 @@ function isHashConflict(error: unknown): boolean {
 function formatPushResult(label: string, result: PushResult): string {
   const submitted = result.submitted?.length ?? 0
   const rejected = result.rejected?.length ?? 0
-  return `Pushed ${label} · ${result.hash} · ${submitted} submitted${rejected > 0 ? `, ${rejected} rejected` : ''}`
+  const unresolved = result.unresolved?.length ?? 0
+  return `Pushed ${label} · ${result.hash} · ${submitted} submitted${rejected > 0 ? `, ${rejected} rejected` : ''}` +
+    (unresolved > 0 ? `, ${unresolved} with unknown outcome — new writes blocked until resolved` : '')
 }
 
 function summarizeOperation(input: {

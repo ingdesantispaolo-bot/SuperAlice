@@ -235,6 +235,7 @@ function statusClass(status: string | undefined): string {
     case 'filled': return 'text-success'
     case 'rejected': return 'text-destructive'
     case 'user-rejected': return 'text-warning'
+    case 'unknown': return 'text-warning'
     case 'cancelled': return 'text-muted-foreground'
     default: return 'text-muted-foreground'
   }
@@ -246,6 +247,7 @@ function statusLabel(status: string, t: TFunction): string {
     case 'filled': return t('tradingReview.operationStatus.filled')
     case 'rejected': return t('tradingReview.operationStatus.rejected')
     case 'user-rejected': return t('tradingReview.operationStatus.userRejected')
+    case 'unknown': return t('tradingReview.operationStatus.unknown')
     case 'cancelled': return t('tradingReview.operationStatus.cancelled')
     default: return status
   }
@@ -1087,7 +1089,8 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 
 function ResultBanner({ result, onDismiss }: { result: WalletPushResult; onDismiss: () => void }) {
   const { t } = useTranslation()
-  const hasRejected = result.rejected.length > 0
+  const unresolved = result.unresolved ?? []
+  const hasRejected = result.rejected.length > 0 || unresolved.length > 0
   return (
     <div className={`flex items-start gap-2 rounded-md border px-3 py-2 text-[12px] leading-[18px] ${
       hasRejected ? 'border-destructive/30 bg-destructive/5 text-destructive' : 'border-success/25 bg-success/5 text-success'
@@ -1102,6 +1105,12 @@ function ResultBanner({ result, onDismiss }: { result: WalletPushResult; onDismi
         </div>
         {result.rejected.map((entry, index) => (
           <div key={`${entry.action}:${index}`} className="mt-0.5 text-destructive/80">{entry.error || entry.action}</div>
+        ))}
+        {unresolved.length > 0 && (
+          <div className="mt-0.5 font-medium">{t('tradingReview.unresolvedResult', { count: unresolved.length })}</div>
+        )}
+        {unresolved.map((entry, index) => (
+          <div key={`unresolved:${entry.action}:${index}`} className="mt-0.5 text-destructive/80">{entry.error || entry.action}</div>
         ))}
       </div>
       <Button variant="ghost" size="xs" onClick={onDismiss} className="text-muted-foreground">

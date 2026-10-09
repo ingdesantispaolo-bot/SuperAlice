@@ -2703,6 +2703,7 @@ export const ja: Resources = {
     stagedWarning: 'これらの操作はステージ済みですが、まだコミットメッセージがありません。プッシュするには、エージェントが先にコミットする必要があります。',
     approvalWarning: '承認すると、これらの操作がブローカー口座へプッシュされます。確定前に口座、売買方向、数量、注文タイプを確認してください。',
     result: '{{submitted}} 件を送信、{{rejected}} 件を却下',
+    unresolvedResult: '{{count}} 件の結果が不明 — 確認されるまで新規注文はブロックされます',
     queue: {
       waitingApproval_one: '承認待ちのコミット {{count}} 件',
       waitingApproval_other: '承認待ちのコミット {{count}} 件',
@@ -2766,6 +2767,7 @@ export const ja: Resources = {
       filled: '約定済み',
       rejected: '却下',
       userRejected: 'ユーザーが却下',
+      unknown: '結果不明',
       cancelled: '取消済み',
     },
   },
