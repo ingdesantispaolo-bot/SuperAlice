@@ -2716,6 +2716,7 @@ export const zhHant: Resources = {
       stagedWaiting_one: '{{count}} 組暫存操作等待提交',
       stagedWaiting_other: '{{count}} 組暫存操作等待提交',
       clean: '工作樹乾淨',
+      blocked: '已阻止：{{count}} 項結果未知',
       needs: '待審批',
       staged: '已暫存',
       pushed: '已推送',
@@ -2738,6 +2739,7 @@ export const zhHant: Resources = {
     },
     status: {
       needsApproval: '需要審批',
+      outcomeUnknown: '結果未知',
       staged: '已暫存',
       pushed: '已推送',
     },

@@ -2712,6 +2712,7 @@ export const zh: Resources = {
       stagedWaiting_one: '{{count}} 组暂存操作等待提交',
       stagedWaiting_other: '{{count}} 组暂存操作等待提交',
       clean: '工作树干净',
+      blocked: '已阻止：{{count}} 项结果未知',
       needs: '待审批',
       staged: '已暂存',
       pushed: '已推送',
@@ -2734,6 +2735,7 @@ export const zh: Resources = {
     },
     status: {
       needsApproval: '需要审批',
+      outcomeUnknown: '结果未知',
       staged: '已暂存',
       pushed: '已推送',
     },

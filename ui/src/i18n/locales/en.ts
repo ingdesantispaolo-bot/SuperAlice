@@ -2748,6 +2748,7 @@ export const en = {
       stagedWaiting_one: '{{count}} staged set waiting for commit',
       stagedWaiting_other: '{{count}} staged sets waiting for commit',
       clean: 'Working tree clean',
+      blocked: 'Blocked: {{count}} unknown outcome(s)',
       needs: 'Needs',
       staged: 'Staged',
       pushed: 'Pushed',
@@ -2770,6 +2771,7 @@ export const en = {
     },
     status: {
       needsApproval: 'Needs approval',
+      outcomeUnknown: 'Outcome unknown',
       staged: 'Staged',
       pushed: 'Pushed',
     },

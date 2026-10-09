@@ -24,6 +24,12 @@ interface PendingAccount {
   status: WalletStatus
 }
 
+/** Account with operations whose broker outcome is unknown — writes blocked. */
+interface BlockedAccount {
+  account: AccountRef
+  count: number
+}
+
 interface AccountHistory {
   accountId: string
   label: string
@@ -306,6 +312,7 @@ export function PushApprovalPanel() {
   const [staged, setStaged] = useState<StagedAccount[]>([])
   const [pending, setPending] = useState<PendingAccount[]>([])
   const [history, setHistory] = useState<AccountHistory[]>([])
+  const [blocked, setBlocked] = useState<BlockedAccount[]>([])
   const [pushing, setPushing] = useState<string | null>(null)
   const [rejecting, setRejecting] = useState<string | null>(null)
   const [confirmingPush, setConfirmingPush] = useState<string | null>(null)
@@ -334,6 +341,7 @@ export function PushApprovalPanel() {
       const stagedResults: StagedAccount[] = []
       const pendingResults: PendingAccount[] = []
       const historyResults: AccountHistory[] = []
+      const blockedResults: BlockedAccount[] = []
       const verifiedAccountIds = new Set<string>()
       const failedAccounts: AccountRef[] = []
 
@@ -350,6 +358,9 @@ export function PushApprovalPanel() {
           }
           if (commits.length > 0) {
             historyResults.push({ accountId: account.id, label: accountLabel(account), commits })
+          }
+          if (status.unresolved?.length) {
+            blockedResults.push({ account, count: status.unresolved.length })
           }
           verifiedAccountIds.add(account.id)
         } catch {
@@ -377,6 +388,13 @@ export function PushApprovalPanel() {
         historyResults,
         previous,
         (item) => item.accountId,
+      ))
+      setBlocked((previous) => mergeAccountResults(
+        accts,
+        verifiedAccountIds,
+        blockedResults,
+        previous,
+        (item) => item.account.id,
       ))
       setVerification({
         total: accts.length,
@@ -521,8 +539,11 @@ export function PushApprovalPanel() {
   const stagedCount = staged.length
   const historyCount = mergedHistory.length
   const verificationIncomplete = verification.listUnavailable || verification.failed.length > 0
+  const unresolvedCount = blocked.reduce((sum, item) => sum + item.count, 0)
   const statusLabel =
-    verificationIncomplete
+    unresolvedCount > 0
+      ? t('tradingReview.queue.blocked', { count: unresolvedCount })
+      : verificationIncomplete
       ? verification.listUnavailable
         ? t('tradingReview.queue.verificationUnknown')
         : t('tradingReview.queue.verificationCount', {
@@ -564,7 +585,7 @@ export function PushApprovalPanel() {
         >
           <div className="shrink-0 border-b border-border/70 px-4 py-3">
             <div className="flex items-center gap-2 text-[12px] leading-[18px] font-medium text-foreground">
-              {verificationIncomplete || waitingCount > 0 ? (
+              {unresolvedCount > 0 || verificationIncomplete || waitingCount > 0 ? (
                 <AlertTriangle size={15} className="text-warning" aria-hidden />
               ) : (
                 <CheckCircle2 size={15} className="text-success" aria-hidden />
@@ -1017,6 +1038,14 @@ function StatusPill({ item }: { item: ReviewItem }) {
       <span className="inline-flex items-center gap-1 rounded-full border border-info/25 bg-info/10 px-2 py-0.5 text-[11px] leading-[15px] font-medium text-info">
         <Clock3 size={12} aria-hidden />
         {t('tradingReview.status.staged')}
+      </span>
+    )
+  }
+  if (item.commit.operations.some((operation) => operation.status === 'unknown')) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[11px] leading-[15px] font-medium text-warning">
+        <AlertTriangle size={12} aria-hidden />
+        {t('tradingReview.status.outcomeUnknown')}
       </span>
     )
   }
