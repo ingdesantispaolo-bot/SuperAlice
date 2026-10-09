@@ -25,6 +25,7 @@
 
 import Decimal from 'decimal.js'
 import type { GitCommit, Operation, OperationResult } from './git/types.js'
+import { effectiveOperation } from './git/types.js'
 
 export interface CostBasisResult {
   /** Running weighted-average cost. Zero when qty <= 0. */
@@ -57,7 +58,8 @@ export function recomputeCostBasisFromCommits(
   const counted = new Set<string>()
   for (const commit of commits) {
     for (let i = 0; i < commit.operations.length; i++) {
-      const op = commit.operations[i]
+      // A resolveOutcome result belongs to the operation it resolves.
+      const op = effectiveOperation(commit.operations[i])
       const result = commit.results[i]
       if (op.action !== 'placeOrder' && op.action !== 'closePosition' && op.action !== 'observeExternalOrder') continue
       if (!result?.orderId) continue
@@ -115,7 +117,7 @@ export function recomputeCostBasisFromCommits(
     }
 
     for (let i = 0; i < commit.operations.length; i++) {
-      const op = commit.operations[i]
+      const op = effectiveOperation(commit.operations[i])
       const result = commit.results[i]
       if (!matchesAliceId(op, aliceId)) continue
       if (!result || !result.success) continue

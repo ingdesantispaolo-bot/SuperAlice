@@ -23,3 +23,12 @@ export type {
   SimulationPositionCurrent,
   SimulationPositionAfter,
 } from './types.js'
+export {
+  PendingHashConflictError,
+  isPendingHashConflict,
+  DispatchOutcomeUnknownError,
+  isDispatchOutcomeUnknown,
+  UnresolvedOutcomeError,
+  isUnresolvedOutcome,
+} from './TradingGit.js'
+export type { UnresolvedOperation, ResolveOutcomeParams, InflightPush } from './types.js'

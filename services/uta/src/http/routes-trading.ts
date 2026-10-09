@@ -8,7 +8,7 @@ import type { UnifiedTradingAccount } from '../domain/trading/UnifiedTradingAcco
 import { searchTradeableContracts } from '../domain/trading/contract-search.js'
 import type { AssetClassHint } from '@traderalice/uta-protocol'
 import { executeOneShotOrder, type OrderEntryPhase } from '../domain/trading/order-entry.js'
-import { isPendingHashConflict } from '../domain/trading/git/TradingGit.js'
+import { isPendingHashConflict, isUnresolvedOutcome, UnresolvedOutcomeError } from '../domain/trading/git/TradingGit.js'
 import { projectOrderHistory, projectTradeHistory } from '../domain/trading/order-history.js'
 
 // ==================== Order entry schemas ====================
@@ -522,7 +522,49 @@ export function createTradingRoutes(ctx: UTAEngineContext) {
           code: 'PENDING_HASH_CONFLICT',
         }, 409)
       }
+      if (isUnresolvedOutcome(err)) {
+        return c.json({
+          error: err instanceof Error ? err.message : 'Unresolved operation outcome',
+          code: 'UNRESOLVED_OUTCOME',
+          unresolved: err instanceof UnresolvedOutcomeError ? err.unresolved : uta.getUnresolved(),
+        }, 409)
+      }
       return c.json({ error: String(err) }, 500)
+    }
+  })
+
+  // Resolve an unknown dispatch outcome (manual, evidence-backed — like push,
+  // never an AI tool). Body: { commitHash, operationIndex, outcome:
+  // 'not-placed' | 'placed', orderId?, filledQty?, filledPrice?, note }.
+  app.post('/uta/:id/wallet/resolve-outcome', async (c) => {
+    const uta = ctx.utaManager.get(c.req.param('id'))
+    if (!uta) return c.json({ error: 'Account not found' }, 404)
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>
+    const outcome = body.outcome
+    if (typeof body.commitHash !== 'string' || !Number.isInteger(body.operationIndex)
+      || (outcome !== 'not-placed' && outcome !== 'placed') || typeof body.note !== 'string') {
+      return c.json({
+        error: 'commitHash (string), operationIndex (integer), outcome ("not-placed" | "placed") and note (string) are required',
+      }, 400)
+    }
+    const optional = (key: string): string | undefined =>
+      typeof body[key] === 'string' && body[key] !== '' ? body[key] as string : undefined
+    try {
+      const hash = await uta.resolveOutcome({
+        commitHash: body.commitHash,
+        operationIndex: body.operationIndex as number,
+        outcome,
+        note: body.note,
+        orderId: optional('orderId'),
+        filledQty: optional('filledQty'),
+        filledPrice: optional('filledPrice'),
+      })
+      return c.json({ hash, unresolved: uta.getUnresolved() })
+    } catch (err) {
+      if (isPendingHashConflict(err)) {
+        return c.json({ error: err instanceof Error ? err.message : String(err), code: 'PENDING_HASH_CONFLICT' }, 409)
+      }
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400)
     }
   })
 

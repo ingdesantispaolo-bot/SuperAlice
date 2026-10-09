@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createUTAClient, type GitExportState } from '@traderalice/uta-protocol'
+import { BrokerError, createUTAClient, type GitExportState } from '@traderalice/uta-protocol'
 import { UTAManagerSDK } from '../../../src/services/uta-client/UTAManagerSDK.js'
 import { createTradingRoutes } from '../../../services/uta/src/http/routes-trading.js'
 import { UTAManager } from '../../../services/uta/src/domain/trading/uta-manager.js'
@@ -139,7 +139,9 @@ it('reports transport loss and recovers the same prepared approval after HTTP re
 })
 
 it('preserves a venue rejection as a failed operation rather than successful submission', async () => {
-  vi.spyOn(broker, 'placeOrder').mockRejectedValue(new Error('local venue rejected'))
+  // A venue refusal is structured: a plain thrown error cannot be told apart
+  // from an accepted order whose answer was lost (next test).
+  vi.spyOn(broker, 'placeOrder').mockRejectedValue(new BrokerError('EXCHANGE', 'local venue rejected'))
   const { remote, hash } = await proposal()
   const result = await remote.push(hash)
   expect(result.submitted).toHaveLength(0)
@@ -148,6 +150,17 @@ it('preserves a venue rejection as a failed operation rather than successful sub
   expect(account.status().pendingHash).toBeNull()
   expect(await broker.getPositions()).toEqual([])
   expect((await remote.getAccount()).totalCashValue).toBe('100000')
+})
+
+it('reports an unclassified venue exception as an unknown outcome, not a rejection', async () => {
+  vi.spyOn(broker, 'placeOrder').mockRejectedValue(new Error('local venue connection reset'))
+  const { remote, hash } = await proposal()
+  const result = await remote.push(hash)
+  expect(result.submitted).toHaveLength(0)
+  expect(result.rejected).toHaveLength(0)
+  expect(result.unresolved).toEqual([expect.objectContaining({ success: false, status: 'unknown' })])
+  expect(account.status().unresolved).toHaveLength(1)
+  await expect(remote.stagePlaceOrder(order)).rejects.toThrow(/unknown outcome/)
 })
 
 it('cancels a loopback read without losing the prepared approval or writing to the venue', async () => {

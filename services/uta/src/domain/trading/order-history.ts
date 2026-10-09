@@ -20,6 +20,7 @@ import type {
   OrderHistoryStatus,
   TradeHistoryEntry,
 } from '@traderalice/uta-protocol'
+import { effectiveOperation } from '@traderalice/uta-protocol'
 
 function toHistoryContract(contract: Contract | undefined): HistoryContract {
   if (!contract) return {}
@@ -71,11 +72,31 @@ function orderFields(order: Order | undefined): {
 export function projectOrderHistory(commits: GitCommit[], opts: { limit?: number } = {}): OrderHistoryEntry[] {
   const byOrderId = new Map<string, OrderHistoryEntry>()
   const anonymous: OrderHistoryEntry[] = [] // rejected-before-submit rows have no orderId
+  const byRef = new Map<string, OrderHistoryEntry>() // `${commitHash}#${index}` → row
 
   for (const commit of commits) {
     for (let i = 0; i < commit.operations.length; i++) {
       const op = commit.operations[i]
       const result = commit.results[i]
+
+      // A resolution updates the row of the operation it resolves (an
+      // unknown outcome), adopting the broker orderId when one was found.
+      if (op.action === 'resolveOutcome') {
+        const target = byRef.get(`${op.commitHash}#${op.operationIndex}`)
+        if (!target || !result) continue
+        target.status = result.status as OrderHistoryStatus
+        target.resolvedAt = commit.timestamp
+        if (result.filledQty) target.filledQty = result.filledQty
+        if (result.filledPrice) target.avgFillPrice = result.filledPrice
+        if (result.error) target.error = result.error
+        if (result.orderId && target.orderId !== result.orderId) {
+          const index = anonymous.indexOf(target)
+          if (index >= 0) anonymous.splice(index, 1)
+          target.orderId = result.orderId
+          byOrderId.set(result.orderId, target)
+        }
+        continue
+      }
 
       if (op.action === 'placeOrder' || op.action === 'observeExternalOrder' || op.action === 'closePosition') {
         const entry: OrderHistoryEntry = {
@@ -95,6 +116,7 @@ export function projectOrderHistory(commits: GitCommit[], opts: { limit?: number
         }
         if (result?.orderId) byOrderId.set(result.orderId, entry)
         else anonymous.push(entry)
+        byRef.set(`${commit.hash}#${i}`, entry)
         continue
       }
 
@@ -136,7 +158,7 @@ export function projectTradeHistory(commits: GitCommit[], opts: { limit?: number
   const orderMeta = new Map<string, { contract: HistoryContract; side: 'BUY' | 'SELL'; multiplier: string }>()
   for (const commit of commits) {
     for (let i = 0; i < commit.operations.length; i++) {
-      const op = commit.operations[i]
+      const op = effectiveOperation(commit.operations[i])
       const result = commit.results[i]
       if (!result?.orderId) continue
       if (op.action === 'placeOrder' || op.action === 'observeExternalOrder') {
@@ -208,7 +230,7 @@ export function projectTradeHistory(commits: GitCommit[], opts: { limit?: number
     }
 
     for (let i = 0; i < commit.operations.length; i++) {
-      const op = commit.operations[i]
+      const op = effectiveOperation(commit.operations[i])
       const result = commit.results[i]
       if (!result?.success) continue
 
