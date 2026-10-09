@@ -653,6 +653,26 @@ export class TradingGit implements ITradingGit {
     return hash
   }
 
+  /**
+   * placeOrder operations handed to the broker (submitted, filled, cancelled
+   * or unknown — not refusals before dispatch) whose commit time satisfies
+   * `onDay`, including the push currently dispatching. Durable: derived from
+   * the log, so a restart does not reset daily limits.
+   */
+  countDispatchedOrders(onDay: (isoTimestamp: string) => boolean): number {
+    const dispatched = new Set<OperationStatus>(['submitted', 'filled', 'cancelled', 'unknown'])
+    const count = (operations: Operation[], results: OperationResult[]): number =>
+      results.filter((r, i) => operations[i]?.action === 'placeOrder' && dispatched.has(r.status)).length
+    let total = 0
+    for (const commit of this.commits) {
+      if (onDay(commit.timestamp)) total += count(commit.operations, commit.results)
+    }
+    if (this.inflight && onDay(this.inflight.startedAt)) {
+      total += count(this.inflight.operations, this.inflight.results)
+    }
+    return total
+  }
+
   /** Every broker orderId the log has ever seen — observation diffs against this. */
   getKnownOrderIds(): Set<string> {
     const known = new Set<string>()

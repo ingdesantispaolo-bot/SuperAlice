@@ -72,6 +72,8 @@ export interface ITradingGit {
   }): Promise<CommitHash>
   /** Every broker orderId the log has ever seen. */
   getKnownOrderIds(): Set<string>
+  /** placeOrder operations dispatched on a day (durable; includes the push in flight). */
+  countDispatchedOrders(onDay: (isoTimestamp: string) => boolean): number
 
   // ---- serialization ----
 

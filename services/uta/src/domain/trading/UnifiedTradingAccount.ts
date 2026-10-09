@@ -37,6 +37,7 @@ import type {
   ResolveOutcomeParams,
 } from './git/types.js'
 import { createGuardPipeline, resolveGuards } from './guards/index.js'
+import { dayKey } from './guards/order-math.js'
 import './contract-ext.js'
 
 /** Structured broker refusals that prove the write was not placed. */
@@ -228,7 +229,17 @@ export class UnifiedTradingAccount {
       }
     }
     const guards = resolveGuards(options.guards ?? [])
-    const guardedDispatcher = createGuardPipeline(dispatcher, broker, guards)
+    const guardedDispatcher = createGuardPipeline(dispatcher, broker, guards, () => {
+      const now = new Date()
+      return {
+        accountId: this.id,
+        now,
+        placedOrdersOn: (timeZone: string) => {
+          const today = dayKey(now, timeZone)
+          return this.git.countDispatchedOrders((iso) => dayKey(new Date(iso), timeZone) === today)
+        },
+      }
+    })
 
     const gitConfig = {
       executeOperation: guardedDispatcher,
