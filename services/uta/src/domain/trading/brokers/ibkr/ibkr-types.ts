@@ -41,6 +41,10 @@ export interface TickSnapshot {
   high?: number
   low?: number
   lastTimestamp?: number
+  /** Any delayed tick (66-73, 88) arrived for this request. */
+  delayed?: boolean
+  /** TWS marketDataType for this request: 1 live, 2 frozen, 3 delayed, 4 delayed-frozen. */
+  marketDataType?: number
 }
 
 /** Result of an account download (reqAccountUpdates round-trip). */

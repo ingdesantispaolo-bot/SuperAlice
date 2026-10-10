@@ -189,6 +189,13 @@ describe('QuoteFreshnessGuard', () => {
     expect(guard.check(ctx({ quote: quote(AAPL(), { ageMs: 5_000 }) }))).toBeNull()
   })
 
+  it('refuses delayed or frozen feeds unless explicitly allowed', () => {
+    const delayed = { ...quote(AAPL()), dataType: 'delayed' as const }
+    expect(new QuoteFreshnessGuard({}).check(ctx({ quote: delayed }))).toMatch(/comes from a delayed feed, not live market data/)
+    expect(new QuoteFreshnessGuard({ allowDelayed: true }).check(ctx({ quote: delayed }))).toBeNull()
+    expect(new QuoteFreshnessGuard({}).check(ctx({ quote: { ...quote(AAPL()), dataType: 'live' } }))).toBeNull()
+  })
+
   it('refuses a spread wider than the limit', () => {
     const guard = new QuoteFreshnessGuard({ maxSpreadPercent: 0.5 })
     expect(guard.check(ctx({ quote: quote(AAPL(), { bid: '99', ask: '101' }) }))).toMatch(/Spread for AAPL is 2\.00%/)

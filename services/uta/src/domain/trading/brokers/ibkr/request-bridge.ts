@@ -686,6 +686,7 @@ export class RequestBridge extends DefaultEWrapper {
     // Delayed variants (66-73) arrive instead of live ticks when the
     // account has no live subscription and reqMarketDataType(3) is set —
     // paper accounts live here. Same field, 15-min-delayed value.
+    if (tickType >= TickTypeEnum.DELAYED_BID && tickType <= TickTypeEnum.DELAYED_LOW) snap.delayed = true
     switch (tickType) {
       case TickTypeEnum.BID:
       case TickTypeEnum.DELAYED_BID: snap.bid = price; break
@@ -715,16 +716,24 @@ export class RequestBridge extends DefaultEWrapper {
     if (tickType === TickTypeEnum.VOLUME || tickType === TickTypeEnum.DELAYED_VOLUME) {
       snap.volume = size.toNumber()
     }
+    if (tickType === TickTypeEnum.DELAYED_VOLUME) snap.delayed = true
   }
 
   override tickString(reqId: number, tickType: number, value: string): void {
     const snap = this.snapshots.get(reqId)
     if (!snap) return
 
-    // TickType 45 = LAST_TIMESTAMP
-    if (tickType === 45) {
+    // LAST_TIMESTAMP (45) live; DELAYED_LAST_TIMESTAMP (88) delayed — the
+    // delayed one must be read too, or a delayed quote gets "now" as its age.
+    if (tickType === TickTypeEnum.LAST_TIMESTAMP || tickType === TickTypeEnum.DELAYED_LAST_TIMESTAMP) {
       snap.lastTimestamp = parseInt(value, 10)
+      if (tickType === TickTypeEnum.DELAYED_LAST_TIMESTAMP) snap.delayed = true
     }
+  }
+
+  override marketDataType(reqId: number, marketDataType: number): void {
+    const snap = this.snapshots.get(reqId)
+    if (snap) snap.marketDataType = marketDataType
   }
 
   override tickSnapshotEnd(reqId: number): void {

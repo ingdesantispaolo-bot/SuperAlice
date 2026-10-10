@@ -317,6 +317,10 @@ export interface Quote {
   high?: string
   low?: string
   timestamp: Date
+  /** Feed the quote came from, when the broker reports it. `delayed` data
+   *  (typically 15 min) and `frozen` (last value of a closed session) must
+   *  not be treated as current prices. Absent = unknown. */
+  dataType?: 'live' | 'delayed' | 'frozen'
 }
 
 export interface MarketClock {

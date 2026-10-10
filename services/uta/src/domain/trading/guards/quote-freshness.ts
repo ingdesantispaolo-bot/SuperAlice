@@ -4,7 +4,8 @@ import { readPercent } from './order-math.js'
 
 /**
  * Refuses to place an order on missing or stale market data: the quote must
- * be at most `maxAgeSeconds` old (default 60) and, when `maxSpreadPercent`
+ * be at most `maxAgeSeconds` old (default 60), must not come from a delayed
+ * or frozen feed (unless `allowDelayed` is true) and, when `maxSpreadPercent`
  * is set, the bid/ask spread must not exceed it (measured on the mid).
  */
 export class QuoteFreshnessGuard implements OperationGuard {
@@ -12,10 +13,12 @@ export class QuoteFreshnessGuard implements OperationGuard {
   readonly needs = { quote: true }
   private readonly maxAgeMs: number
   private readonly maxSpreadPercent?: number
+  private readonly allowDelayed: boolean
 
   constructor(options: Record<string, unknown>) {
     this.maxAgeMs = readPercent(options, 'maxAgeSeconds', 60) * 1000
     if (options.maxSpreadPercent != null) this.maxSpreadPercent = readPercent(options, 'maxSpreadPercent')
+    this.allowDelayed = options.allowDelayed === true
   }
 
   check(ctx: GuardContext): string | null {
@@ -24,6 +27,9 @@ export class QuoteFreshnessGuard implements OperationGuard {
     const symbol = op.contract.symbol || op.contract.aliceId || 'instrument'
     const quote = ctx.quote
     if (!quote) return `No quote available for ${symbol} — refusing to trade blind`
+    if (quote.dataType && quote.dataType !== 'live' && !this.allowDelayed) {
+      return `Quote for ${symbol} comes from a ${quote.dataType} feed, not live market data — check the market data subscription (paper accounts must share the live subscription)`
+    }
 
     const at = quote.timestamp instanceof Date ? quote.timestamp : new Date(quote.timestamp)
     const now = ctx.now ?? new Date()

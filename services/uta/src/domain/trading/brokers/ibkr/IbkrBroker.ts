@@ -53,6 +53,14 @@ import type { IbkrBrokerConfig } from './ibkr-types.js'
  * connection or an unclassified message leaves the outcome unknown — the
  * orderId is kept so sync can look the order up instead of re-sending it.
  */
+/** Live / delayed / frozen, from the marketDataType callback or delayed ticks. */
+function quoteDataType(snap: import('./ibkr-types.js').TickSnapshot): 'live' | 'delayed' | 'frozen' | undefined {
+  if (snap.delayed || snap.marketDataType === 3 || snap.marketDataType === 4) return 'delayed'
+  if (snap.marketDataType === 2) return 'frozen'
+  if (snap.marketDataType === 1) return 'live'
+  return undefined
+}
+
 function writeFailure(err: unknown, sentOrderId: number | null): PlaceOrderResult {
   const error = err instanceof Error ? err.message : String(err)
   if (sentOrderId === null) return { success: false, error }
@@ -847,6 +855,7 @@ export class IbkrBroker implements IBroker {
       high: snap.high != null ? String(snap.high) : undefined,
       low: snap.low != null ? String(snap.low) : undefined,
       timestamp: snap.lastTimestamp ? new Date(snap.lastTimestamp * 1000) : new Date(),
+      ...(quoteDataType(snap) && { dataType: quoteDataType(snap) }),
     }
   }
 
