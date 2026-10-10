@@ -36,3 +36,39 @@ describe('IbkrBroker — quote feed type', () => {
     expect((await brokerWithSnapshot({ bid: 1, ask: 1.01 }).getQuote(spy())).dataType).toBeUndefined()
   })
 })
+
+describe('IbkrBroker — init waits for managedAccounts', () => {
+  function brokerForInit(accountAfterMs: number | null) {
+    const broker = new IbkrBroker({ id: 'ibkr-test', host: '127.0.0.1', port: 7497, clientId: 91 })
+    const startedAt = Date.now()
+    const bridge = {
+      connectionDead: false,
+      waitForConnect: vi.fn(async () => {}),
+      getAccountId: vi.fn(() => (accountAfterMs !== null && Date.now() - startedAt >= accountAfterMs ? 'DU1234567' : null)),
+      startAccountSubscription: vi.fn(),
+      waitForAccountReady: vi.fn(async () => {}),
+      markAlive: vi.fn(),
+    }
+    ;(broker as unknown as { bridge: unknown }).bridge = bridge
+    ;(broker as unknown as { client: unknown }).client = { isConnected: () => false, reqMarketDataType: vi.fn(), disconnect: vi.fn() }
+    ;(broker as unknown as { startHeartbeat: unknown }).startHeartbeat = vi.fn()
+    return { broker, bridge }
+  }
+
+  it('accepts an account list that arrives just after the handshake', async () => {
+    const { broker, bridge } = brokerForInit(150)
+    await broker.init()
+    expect(bridge.startAccountSubscription).toHaveBeenCalledWith('DU1234567')
+  })
+
+  it('still fails when no account arrives within the wait', async () => {
+    const previous = IbkrBroker.ACCOUNT_WAIT_MS
+    IbkrBroker.ACCOUNT_WAIT_MS = 200
+    try {
+      const { broker } = brokerForInit(null)
+      await expect(broker.init()).rejects.toThrow(/No account detected/)
+    } finally {
+      IbkrBroker.ACCOUNT_WAIT_MS = previous
+    }
+  })
+})

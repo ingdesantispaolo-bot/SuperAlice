@@ -229,8 +229,10 @@ export class IbkrBroker implements IBroker {
     // request just times out. Type 3 = live when entitled, delayed otherwise.
     this.client.reqMarketDataType(3)
 
-    // Resolve account ID
-    this.accountId = this.config.accountId ?? this.bridge.getAccountId()
+    // Resolve account ID. TWS sends managedAccounts right after nextValidId,
+    // which already resolved the handshake — wait briefly for it instead of
+    // declaring a (permanent) configuration error on a healthy connection.
+    this.accountId = this.config.accountId ?? await this.awaitManagedAccount(IbkrBroker.ACCOUNT_WAIT_MS)
     if (!this.accountId) {
       throw new BrokerError('CONFIG', 'No account detected from TWS/Gateway. Set accountId in config for multi-account setups.')
     }
@@ -245,6 +247,19 @@ export class IbkrBroker implements IBroker {
     } catch (err) {
       throw BrokerError.from(err, 'NETWORK')
     }
+  }
+
+  /** How long init waits for managedAccounts after the handshake. */
+  static ACCOUNT_WAIT_MS = 5_000
+
+  private async awaitManagedAccount(timeoutMs: number): Promise<string | null> {
+    const deadline = Date.now() + timeoutMs
+    let accountId = this.bridge.getAccountId()
+    while (!accountId && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      accountId = this.bridge.getAccountId()
+    }
+    return accountId
   }
 
   async close(): Promise<void> {
