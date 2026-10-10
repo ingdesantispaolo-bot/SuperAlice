@@ -789,7 +789,7 @@ export class RequestBridge extends DefaultEWrapper {
   override openOrderEnd(): void {
     if (!this.openOrdersCollector) return
     clearTimeout(this.openOrdersCollector.timer)
-    this.openOrdersCollector.resolve(this.openOrdersCollector.orders)
+    this.openOrdersCollector.resolve(latestPerOrder(this.openOrdersCollector.orders))
     this.openOrdersCollector = null
   }
 
@@ -802,7 +802,7 @@ export class RequestBridge extends DefaultEWrapper {
   override completedOrdersEnd(): void {
     if (!this.completedOrdersCollector) return
     clearTimeout(this.completedOrdersCollector.timer)
-    this.completedOrdersCollector.resolve(this.completedOrdersCollector.orders)
+    this.completedOrdersCollector.resolve(latestPerOrder(this.completedOrdersCollector.orders))
     this.completedOrdersCollector = null
   }
 
@@ -812,4 +812,19 @@ export class RequestBridge extends DefaultEWrapper {
     if (!this.currentTimePending) return
     this.currentTimePending.resolve(time)
   }
+}
+
+/**
+ * TWS can send openOrder for the same order more than once while a listing
+ * is being collected (a status change during the request). Keep the latest
+ * per order — keyed by permId (unique across clients, set on manual TWS
+ * orders too), else orderId — so a working order is never counted twice.
+ */
+export function latestPerOrder(orders: CollectedOpenOrder[]): CollectedOpenOrder[] {
+  const byKey = new Map<string, CollectedOpenOrder>()
+  orders.forEach((o, index) => {
+    const key = o.order.permId ? `perm:${o.order.permId}` : o.order.orderId ? `id:${o.order.orderId}` : `idx:${index}`
+    byKey.set(key, o)
+  })
+  return [...byKey.values()]
 }
