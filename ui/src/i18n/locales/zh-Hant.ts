@@ -1204,6 +1204,8 @@ export const zhHant: Resources = {
       allowAiTradingOn: '開啟——AI 可自行向券商發送訂單，無需每次徵求你的同意。',
       allowAiTradingOff: '關閉——AI 可以暫存並提議交易，但每次 push 都需要你在 Web UI 中核准。',
       allowAiTradingWarning: 'AI 自動交易已開啟。AI 可自行下單、改單、撤單。每帳戶的唯讀設定仍然生效。',
+      allowAiTradingScope: '僅限以下帳戶：{{accounts}}。其他帳戶仍需你的審批。',
+      allowAiTradingScopeNone: '帳戶清單為空：沒有帳戶允許 AI 推送。',
       allowAiTradingConfirmTitle: '開啟 AI 自動交易？',
       allowAiTradingConfirmBody: '開啟後，AI 可在不徵求你同意的情況下向券商發送真實訂單。UTA 交易介面目前仍不穩定，可能存在精度或參數問題。強烈不建議在實盤帳戶上使用——請使用模擬 / demo 帳戶。',
       allowAiTradingConfirmCta: '開啟自動交易',

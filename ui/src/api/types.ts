@@ -212,7 +212,7 @@ export interface AIProviderConfig {
 export interface AppConfig {
   aiProvider: AIProviderConfig
   engine: Record<string, unknown>
-  agent: { allowAiTrading: boolean; claudeCode: Record<string, unknown> }
+  agent: { allowAiTrading: boolean; aiTradingAccounts?: string[]; claudeCode: Record<string, unknown> }
   trading: {
     mode?: TradingMode
     observeExternalOrdersEvery: string

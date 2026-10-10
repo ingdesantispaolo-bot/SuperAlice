@@ -1197,6 +1197,8 @@ export const ja: Resources = {
       allowAiTradingOn: 'ON——AI は毎回確認することなく、自分でブローカーに注文を送信できます。',
       allowAiTradingOff: 'OFF——AI は取引をステージ・提案できますが、push のたびに Web UI での承認が必要です。',
       allowAiTradingWarning: 'AI 自動取引が ON です。AI は自分で発注・変更・取消を行えます。口座ごとの読み取り専用設定は引き続き有効です。',
+      allowAiTradingScope: '対象アカウントのみ：{{accounts}}。その他のアカウントは引き続き承認が必要です。',
+      allowAiTradingScopeNone: 'アカウント一覧が空です：AI のプッシュを許可するアカウントはありません。',
       allowAiTradingConfirmTitle: 'AI 自動取引を有効にしますか？',
       allowAiTradingConfirmBody: '有効にすると、AI は毎回確認することなくブローカーに実際の注文を送信できます。UTA の取引インターフェースはまだ不安定で、精度やパラメータの問題がある可能性があります。実資金の口座での使用は強く非推奨です——ペーパー / デモ口座を使用してください。',
       allowAiTradingConfirmCta: '自動取引を有効化',

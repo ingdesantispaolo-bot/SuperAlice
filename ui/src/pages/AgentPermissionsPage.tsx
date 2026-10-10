@@ -227,6 +227,13 @@ function AiTradingToggle({
           {t('settings.agent.allowAiTradingWarning')}
         </div>
       )}
+      {enabled && config.agent?.aiTradingAccounts && (
+        <div className="mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground leading-relaxed">
+          {config.agent.aiTradingAccounts.length > 0
+            ? t('settings.agent.allowAiTradingScope', { accounts: config.agent.aiTradingAccounts.join(', ') })
+            : t('settings.agent.allowAiTradingScopeNone')}
+        </div>
+      )}
       {enabled && mode !== 'pro' && (
         <div className="mt-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-[12px] text-muted-foreground leading-relaxed">
           {t('settings.agentPermissions.aiPush.proOnly')}

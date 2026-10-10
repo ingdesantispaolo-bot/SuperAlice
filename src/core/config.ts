@@ -247,6 +247,11 @@ const agentSchema = z.object({
    *  in the UI behind a danger warning + double-confirm. Per-account `readOnly`
    *  still wins: proposals can exist, but push cannot mutate the account. */
   allowAiTrading: z.boolean().default(false),
+  /** Optional scope for `allowAiTrading`: when set, AI-initiated pushes are
+   *  allowed only on these UTA ids (e.g. the paper account); every other
+   *  account keeps manual approval. Absent → the master switch applies to
+   *  all accounts. */
+  aiTradingAccounts: z.array(z.string()).optional(),
   claudeCode: z.object({
     allowedTools: z.array(z.string()).optional(),
     disallowedTools: z.array(z.string()).default([

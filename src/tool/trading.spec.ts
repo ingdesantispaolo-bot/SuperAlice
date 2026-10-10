@@ -360,4 +360,21 @@ describe('tradingPush — AI-trading gate (#95)', () => {
     await run(tools.tradingPush, {})
     expect(pushed()).toBe(0)
   })
+
+  it('scoped to the paper account: pushes there, leaves the live account awaiting approval', async () => {
+    const pushes: string[] = []
+    const account = (id: string) => ({
+      id,
+      status: async () => ({ pendingMessage: 'ready to push', staged: [], pendingHash: `h-${id}` }),
+      push: async () => { pushes.push(id); return { hash: `h-${id}`, message: 'sent', operationCount: 1, submitted: [{}], rejected: [] } },
+    })
+    const manager = { resolve: async () => [account('ibkr-paper'), account('ibkr-live')] } as never
+    const tools = createTradingTools(manager, (accountId) => accountId === 'ibkr-paper')
+
+    const res = await run(tools.tradingPush, {}) as { results: Array<{ source: string }>; awaitingApproval: Array<{ source: string }> }
+
+    expect(pushes).toEqual(['ibkr-paper'])
+    expect(res.results.map((r) => r.source)).toEqual(['ibkr-paper'])
+    expect(res.awaitingApproval.map((r) => r.source)).toEqual(['ibkr-live'])
+  })
 })

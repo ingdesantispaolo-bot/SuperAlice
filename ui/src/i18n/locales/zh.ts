@@ -1200,6 +1200,8 @@ export const zh: Resources = {
       allowAiTradingOn: '开启——AI 可自行向券商发送订单，无需每次征求你的同意。',
       allowAiTradingOff: '关闭——AI 可以暂存并提议交易，但每次 push 都需要你在 Web UI 中批准。',
       allowAiTradingWarning: 'AI 自动交易已开启。AI 可自行下单、改单、撤单。每账户的只读设置仍然生效。',
+      allowAiTradingScope: '仅限以下账户：{{accounts}}。其他账户仍需你的审批。',
+      allowAiTradingScopeNone: '账户列表为空：没有账户允许 AI 推送。',
       allowAiTradingConfirmTitle: '开启 AI 自动交易？',
       allowAiTradingConfirmBody: '开启后，AI 可在不征求你同意的情况下向券商发送真实订单。UTA 交易接口目前仍不稳定，可能存在精度或参数问题。强烈不建议在实盘账户上使用——请使用模拟 / demo 账户。',
       allowAiTradingConfirmCta: '开启自动交易',

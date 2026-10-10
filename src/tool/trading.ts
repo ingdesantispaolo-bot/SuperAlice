@@ -201,14 +201,15 @@ async function stageAndMaybeCommit(
 
 /**
  * @param manager        UTA SDK manager (account resolution + FX).
- * @param allowAiTrading  Live getter for the `agent.allowAiTrading` master
- *   switch. Read at call time (not captured) so toggling it in Settings takes
- *   effect without a restart. Gates `tradingPush`: false ⇒ stage + ask the user
- *   to approve in the Web UI; true ⇒ the AI pushes to the broker directly.
+ * @param allowAiTrading  Live, per-account getter for AI-initiated pushes
+ *   (`agent.allowAiTrading`, optionally scoped by `agent.aiTradingAccounts`).
+ *   Read at call time (not captured) so toggling it in Settings takes effect
+ *   without a restart. Gates `tradingPush`: false ⇒ stage + ask the user to
+ *   approve in the Web UI; true ⇒ the AI pushes to that broker directly.
  */
 export function createTradingTools(
   manager: UTAManagerSDK,
-  allowAiTrading: () => boolean = () => false,
+  allowAiTrading: (accountId: string) => boolean = () => false,
 ): Record<string, Tool> {
   return {
     listUTAs: tool({
@@ -851,18 +852,22 @@ ONLY if the operator has enabled "Allow AI to push trades" in Settings → Agent
         // Gate: AI-initiated execution is OFF by default. Without the operator's
         // explicit opt-in, surface the pending ops for manual Web-UI approval
         // rather than sending live orders to the broker.
-        if (!allowAiTrading()) {
+        const allowed = pending.filter(({ uta }) => allowAiTrading(uta.id))
+        const manual = pending.filter(({ uta }) => !allowAiTrading(uta.id))
+        const awaitingApproval = manual.map(({ uta, status }) => ({
+          source: uta.id,
+          ...compactStatus(status),
+        }))
+        if (allowed.length === 0) {
           return {
-            message: 'Push requires manual approval (AI trading is disabled). Tell the user to review and approve the pending operations in the Web UI (Trading as Git page, or the account detail page).',
-            pending: pending.map(({ uta, status }) => ({
-              source: uta.id,
-              ...compactStatus(status),
-            })),
+            message: 'Push requires manual approval (AI trading is disabled for this account). Tell the user to review and approve the pending operations in the Web UI (Trading as Git page, or the account detail page).',
+            pending: awaitingApproval,
           }
         }
-        // AI trading enabled — execute for real. Each push() sends the committed
-        // operations to the broker. Per-account failures degrade individually.
-        const results = await Promise.all(pending.map(async ({ uta, status }) => {
+        // AI trading enabled for these accounts — execute for real. Each push()
+        // sends the committed operations to the broker. Per-account failures
+        // degrade individually; accounts outside the scope still need approval.
+        const results = await Promise.all(allowed.map(async ({ uta, status }) => {
           try {
             if (!status.pendingHash) {
               return { source: uta.id, error: 'Pending commit has no hash; refresh Trading as Git and approve there.' }
@@ -872,7 +877,11 @@ ONLY if the operator has enabled "Allow AI to push trades" in Settings → Agent
             return { source: uta.id, ...handleBrokerError(err) }
           }
         }))
-        return { message: 'AI trading is enabled — pushed committed operations to the broker.', results }
+        return {
+          message: 'AI trading is enabled — pushed committed operations to the broker.',
+          results,
+          ...(awaitingApproval.length > 0 && { awaitingApproval }),
+        }
       },
     }),
 
