@@ -72,6 +72,12 @@ function classifyCode(code: number, msg: string): BrokerErrorCode {
   if (code === 161) return 'EXCHANGE'  // Cancel attempted when not connected
   if (code === 162) return 'EXCHANGE'  // Historical data query error
   if (code === 354) return 'EXCHANGE'  // Market data not subscribed
+  // Order refusals TWS returns for the request itself — nothing is working
+  // at the venue, so these are definitive (not unknown outcomes).
+  if (code === 321) return 'EXCHANGE'  // Error validating request (incl. Read-Only API)
+  if (code === 404) return 'EXCHANGE'  // Shares not available for short sale
+  if (code === 10147) return 'EXCHANGE' // Order to cancel not found
+  if (code === 10148) return 'EXCHANGE' // Order cannot be cancelled in its state
 
   return 'UNKNOWN'
 }

@@ -3,6 +3,7 @@ import Decimal from 'decimal.js'
 import { Contract, Order } from '@traderalice/ibkr'
 import { IbkrBroker } from './IbkrBroker.js'
 import { BrokerError } from '../types.js'
+import { classifyIbkrError } from './ibkr-contracts.js'
 
 /**
  * Write outcomes after the request reached TWS. Before send, a failure is a
@@ -64,6 +65,17 @@ describe('IbkrBroker — write outcome after send', () => {
     expect(result.success).toBe(false)
     expect(result.outcomeUnknown).toBeUndefined()
     expect(result.orderId).toBe('42')
+  })
+
+  it('a request-validation refusal (e.g. Read-Only API, code 321) is definitive, not unknown', async () => {
+    const { broker, bridge } = brokerWithTws()
+    bridge.requestOrder.mockRejectedValueOnce(classifyIbkrError(321, 'Error validating request.-'bN' : cause - The API interface is currently in Read-Only mode.'))
+    const { contract, order } = aaplLimitBuy()
+
+    const result = await broker.placeOrder(contract, order)
+
+    expect(result.success).toBe(false)
+    expect(result.outcomeUnknown).toBeUndefined()
   })
 
   it('a failure before anything is sent is definitive', async () => {
