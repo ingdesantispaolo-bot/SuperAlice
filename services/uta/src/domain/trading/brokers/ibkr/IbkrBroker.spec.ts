@@ -513,6 +513,18 @@ describe('IbkrBroker — dead-connection gate (issue #294)', () => {
     expect(client.placeOrder).not.toHaveBeenCalled()
   })
 
+  it('retries one unanswered probe before refusing the write', async () => {
+    const { broker, bridge, client } = brokerWithContractIo(recordedContract('aapl-stock'))
+    bridge.requestCurrentTime.mockRejectedValueOnce(new Error('currentTime request timed out'))
+    const { contract, order } = stkOrder()
+
+    await expect(broker.placeOrder(contract, order)).resolves.toMatchObject({ success: true })
+
+    expect(bridge.requestCurrentTime).toHaveBeenCalledTimes(2)
+    expect(bridge.markDead).not.toHaveBeenCalled()
+    expect(client.placeOrder).toHaveBeenCalledOnce()
+  })
+
   it('uses the same write probe for modify and cancel', async () => {
     const canonical = recordedContract('aapl-stock')
     const { broker, bridge, client } = brokerWithContractIo(canonical)

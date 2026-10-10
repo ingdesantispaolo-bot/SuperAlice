@@ -71,7 +71,10 @@ function writeFailure(err: unknown, sentOrderId: number | null): PlaceOrderResul
   return { success: false, outcomeUnknown: true, orderId: String(sentOrderId), error }
 }
 
-const WRITE_LIVENESS_TIMEOUT_MS = 3_000
+const WRITE_LIVENESS_TIMEOUT_MS = 5_000
+/** A single unanswered currentTime is not proof of a dead socket (seen live on
+ *  a healthy paper session): retry once before refusing the write. */
+const WRITE_LIVENESS_ATTEMPTS = 2
 const OPTION_MARK_SUCCESS_TTL_MS = 15_000
 const OPTION_MARK_FAILURE_TTL_MS = 60_000
 const OPTION_MARK_CONCURRENCY = 8
@@ -176,7 +179,14 @@ export class IbkrBroker implements IBroker {
   private async _ensureWriteAlive(): Promise<void> {
     this._ensureAlive()
     try {
-      await this.bridge.requestCurrentTime(WRITE_LIVENESS_TIMEOUT_MS)
+      for (let attempt = 1; ; attempt++) {
+        try {
+          await this.bridge.requestCurrentTime(WRITE_LIVENESS_TIMEOUT_MS)
+          break
+        } catch (err) {
+          if (attempt >= WRITE_LIVENESS_ATTEMPTS || this.bridge.connectionDead) throw err
+        }
+      }
       this._ensureAlive()
     } catch (err) {
       this.bridge.markDead('Write-path liveness probe failed')
