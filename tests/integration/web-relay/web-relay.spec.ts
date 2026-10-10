@@ -1,4 +1,5 @@
 import { createServer, request as httpRequest, type Server } from 'node:http'
+import type { Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocket, WebSocketServer } from 'ws'
 
@@ -431,6 +432,36 @@ describe('WebRelay', () => {
     await expect(relay.connect('local', 'b')).rejects.toThrow('different AliceProject')
     expect(relay.status.target).toMatchObject({ machine: 'local', project: 'a' })
     expect(await (await fetch(`${origin}/api/who`)).json()).toEqual({ label: 'A', cookie: null })
+  })
+
+  it('keeps serving after a browser resets a proxied API or HMR WebSocket', async () => {
+    const runtime = await backend('dev-id', 'development')
+    openedBackends.push(runtime.server)
+    const ui = createServer((_req, res) => res.end('vite'))
+    const hmr = new WebSocketServer({ noServer: true })
+    ui.on('upgrade', (req, socket, head) => hmr.handleUpgrade(req, socket, head, () => undefined))
+    await new Promise<void>((done) => ui.listen(0, '127.0.0.1', done))
+    openedBackends.push(ui)
+    const address = ui.address()
+    if (!address || typeof address === 'string') throw new Error('Missing Vite fixture port')
+    const relay = new WebRelay({ writeStartup: async () => undefined, readStartup: async () => null,
+      uiOrigin: `http://127.0.0.1:${address.port}`,
+      inspectLocal: async () => ({ machine: { key: 'local', displayName: 'This computer', projects: [{
+        key: 'dev', id: 'dev-id', displayName: 'Development', available: true,
+        runtime: { webEndpoint: `http://127.0.0.1:${runtime.port}` },
+      }] } }) as never,
+      waitReady: async () => undefined,
+    })
+    const origin = await relay.listen()
+    openedRelays.push(relay)
+    await relay.connect('local', 'dev')
+    for (const path of ['/api/echo', '/?token=test']) {
+      const ws = new WebSocket(origin.replace('http:', 'ws:') + path, { origin })
+      await new Promise<void>((done, reject) => { ws.once('open', done); ws.once('error', reject) })
+      ;(ws as unknown as { _socket: Socket })._socket.resetAndDestroy()
+    }
+    await new Promise((done) => setTimeout(done, 200))
+    expect(await (await fetch(`${origin}/api/who`)).json()).toMatchObject({ label: 'development' })
   })
 
   it('forwards WebSocket frames and closes the old socket on switch', async () => {

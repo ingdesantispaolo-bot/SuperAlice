@@ -551,6 +551,9 @@ export class WebRelay {
   }
 
   private upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    // A browser that drops the connection (killed tab, sleep, network change)
+    // resets the socket; an unhandled 'error' there would take the relay down.
+    socket.on('error', () => socket.destroy())
     const surfaceOrigin = this.surfaceOrigin(req)
     if (!this.validRequest(req, false, surfaceOrigin ?? this.origin)) { socket.destroy(); return }
     if (!surfaceOrigin && !req.url?.startsWith('/api/')) {
@@ -565,6 +568,8 @@ export class WebRelay {
     headers['connection'] = 'Upgrade'
     const upstream = httpRequest({ hostname: LOOPBACK, port: endpoint.port, method: 'GET', path: req.url, headers })
     upstream.on('upgrade', (response, peer, peerHead) => {
+      peer.on('error', () => peer.destroy())
+      if (socket.destroyed) { peer.destroy(); return }
       const lines = [`HTTP/1.1 ${response.statusCode ?? 101} Switching Protocols`, ...Object.entries(response.headers).map(([key, value]) => `${key}: ${value}`), '', '']
       socket.write(lines.join('\r\n'))
       if (peerHead.length) socket.write(peerHead)
@@ -601,6 +606,8 @@ export class WebRelay {
     delete headers['authorization']
     const upstream = httpRequest({ hostname: endpoint.hostname, port: endpoint.port, method: 'GET', path: req.url, headers })
     upstream.on('upgrade', (response, peer, peerHead) => {
+      peer.on('error', () => peer.destroy())
+      if (socket.destroyed) { peer.destroy(); return }
       const lines = [`HTTP/1.1 ${response.statusCode ?? 101} Switching Protocols`, ...Object.entries(response.headers).map(([key, value]) => `${key}: ${value}`), '', '']
       socket.write(lines.join('\r\n'))
       if (peerHead.length) socket.write(peerHead)
