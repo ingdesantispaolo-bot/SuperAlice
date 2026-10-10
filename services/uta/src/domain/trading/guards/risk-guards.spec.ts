@@ -10,6 +10,7 @@ import { MinCashGuard } from './min-cash.js'
 import { MaxOrdersPerDayGuard } from './max-orders-per-day.js'
 import { QuoteFreshnessGuard } from './quote-freshness.js'
 import { MaxDailyLossGuard } from './max-daily-loss.js'
+import { SymbolWhitelistGuard } from './symbol-whitelist.js'
 import { resolveGuards } from './registry.js'
 import { dayKey } from './order-math.js'
 import type { GuardContext } from './types.js'
@@ -235,6 +236,23 @@ describe('MaxDailyLossGuard', () => {
     const now = new Date('2026-10-09T15:00:00Z')
     expect(await new MaxDailyLossGuard({ maxLossPercent: 2, snapshotBaseDir: dir }).check(ctx({ now }))).toMatch(/No account snapshot yet for 2026-10-09/)
     expect(await new MaxDailyLossGuard({ maxLossPercent: 2, snapshotBaseDir: dir, allowWithoutBaseline: true }).check(ctx({ now }))).toBeNull()
+  })
+})
+
+// ==================== symbol-whitelist allowReducing ====================
+
+describe('SymbolWhitelistGuard allowReducing', () => {
+  const whitelist = (allowReducing: boolean) => new SymbolWhitelistGuard({ symbols: ['MSFT'], allowReducing })
+
+  it('lets an unlisted holding be sold down, never bought', () => {
+    const guard = whitelist(true)
+    expect(guard.check(ctx({ operation: place(AAPL(), order('SELL', '10')), positions: [held(AAPL(), '10')] }))).toBeNull()
+    expect(guard.check(ctx({ operation: place(AAPL(), order('SELL', '11')), positions: [held(AAPL(), '10')] }))).toMatch(/not in the allowed list/)
+    expect(guard.check(ctx({ operation: place(AAPL(), order('BUY', '1')), positions: [held(AAPL(), '10')] }))).toMatch(/not in the allowed list/)
+  })
+
+  it('without the option an unlisted sell is refused as before', () => {
+    expect(whitelist(false).check(ctx({ operation: place(AAPL(), order('SELL', '10')), positions: [held(AAPL(), '10')] }))).toMatch(/not in the allowed list/)
   })
 })
 
