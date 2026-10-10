@@ -123,6 +123,46 @@ describe('planRebalance', () => {
   })
 })
 
+describe('planRebalance — strategy sleeve', () => {
+  // The paper account already holds unrelated stocks: the strategy must
+  // manage only its own instruments, sized on its own budget.
+  const existing = [held('acc|AAPL', '260', '336'), held('acc|MSFT', '400', '535')]
+
+  it('scope "listed" leaves holdings outside the target untouched', () => {
+    const plan = planRebalance({
+      target: target({ 'acc|TESTA': '0.5', 'acc|TESTB': '0.5' }, '0'),
+      account: account('1000000', '500000'),
+      positions: existing, openOrders: [],
+      quotes: quotes(quote('acc|TESTA', '99.99', '100'), quote('acc|TESTB', '49.99', '50')),
+      now: NOW,
+      policy: { scope: 'listed', capital: '100000' },
+    })
+    expect(plan.orders.map((o) => [o.aliceId, o.action, o.quantity])).toEqual([
+      ['acc|TESTA', 'BUY', '500'],
+      ['acc|TESTB', 'BUY', '1000'],
+    ])
+    expect(plan.equity).toBe('100000')
+  })
+
+  it('default scope "account" would sell the unrelated holdings', () => {
+    const plan = planRebalance({
+      target: target({ 'acc|TESTA': '1' }, '0'),
+      account: account('1000000', '500000'),
+      positions: existing, openOrders: [],
+      quotes: quotes(quote('acc|TESTA', '99.99', '100'), quote('acc|AAPL', '336', '336.1'), quote('acc|MSFT', '535', '535.1')),
+      now: NOW,
+    })
+    expect(plan.orders.filter((o) => o.action === 'SELL').map((o) => o.aliceId)).toEqual(['acc|AAPL', 'acc|MSFT'])
+  })
+
+  it('refuses a budget larger than the account', () => {
+    expect(() => planRebalance({
+      target: target({ 'acc|TESTA': '1' }, '0'), account: account('10000'), positions: [], openOrders: [],
+      quotes: quotes(quote('acc|TESTA', '99', '100')), now: NOW, policy: { capital: '20000' },
+    })).toThrow(/exceeds net liquidation/)
+  })
+})
+
 describe('target identity', () => {
   it('is stable across weight order and changes with any term', () => {
     const a = target({ 'acc|A': '0.5', 'acc|B': '0.5' }, '0')

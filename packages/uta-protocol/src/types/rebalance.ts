@@ -29,6 +29,13 @@ export interface TargetPortfolio {
 export interface RebalancePolicy {
   /** Skip trades whose estimated notional is below this (account currency). Default 0. */
   minTradeValue?: string
+  /** `account` (default): every held instrument not in the target is sold.
+   *  `listed`: only instruments listed in the target are managed; other
+   *  holdings are left untouched (a strategy sleeve beside existing positions). */
+  scope?: 'account' | 'listed'
+  /** Budget the weights apply to (account currency). Default: net
+   *  liquidation. Must not exceed it. */
+  capital?: string
   /** Allowed |Σweights + cash − 1|. Default 1e-6. */
   tolerance?: string
 }

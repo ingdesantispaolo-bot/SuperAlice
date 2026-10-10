@@ -841,7 +841,9 @@ export class UnifiedTradingAccount {
     for (const o of openOrders) this.stampAliceId(o.contract)
 
     const ids = new Set<string>(target.weights.map((w) => w.aliceId))
-    for (const p of positions) if (!p.quantity.isZero() && p.contract.aliceId) ids.add(p.contract.aliceId)
+    if ((policy?.scope ?? 'account') === 'account') {
+      for (const p of positions) if (!p.quantity.isZero() && p.contract.aliceId) ids.add(p.contract.aliceId)
+    }
     const quotes = new Map<string, Quote>()
     for (const id of ids) {
       const contract = this.contractFromAliceId(id)

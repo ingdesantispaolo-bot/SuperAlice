@@ -109,16 +109,23 @@ export function planRebalance(input: {
   const policy = input.policy ?? {}
   validateTargetPortfolio(target, now, policy)
 
-  const equity = dec(account.netLiquidation, 'account netLiquidation')
-  if (!equity.gt(0)) throw new RebalanceError('account net liquidation must be positive')
+  const netLiquidation = dec(account.netLiquidation, 'account netLiquidation')
+  if (!netLiquidation.gt(0)) throw new RebalanceError('account net liquidation must be positive')
+  const equity = policy.capital != null ? dec(policy.capital, 'capital') : netLiquidation
+  if (!equity.gt(0)) throw new RebalanceError('capital must be positive')
+  if (equity.gt(netLiquidation)) throw new RebalanceError(`capital ${equity.toFixed()} exceeds net liquidation ${netLiquidation.toFixed()}`)
+  const scope = policy.scope ?? 'account'
+  if (scope !== 'account' && scope !== 'listed') throw new RebalanceError(`unknown scope ${String(scope)}`)
   const baseCurrency = account.baseCurrency
   const minTrade = dec(policy.minTradeValue ?? '0', 'minTradeValue')
 
   const aliceIdOf = (c: { aliceId?: string }) => c.aliceId ?? ''
+  const listedIds = new Set(target.weights.map((w) => w.aliceId))
   const held = new Map<string, Position>()
   for (const p of positions) {
     if (p.quantity.isZero()) continue
     const id = aliceIdOf(p.contract)
+    if (scope === 'listed' && !listedIds.has(id)) continue
     if (!id) throw new RebalanceError(`position ${p.contract.symbol ?? '?'} has no aliceId`)
     if (p.side !== 'long') throw new RebalanceError(`short position in ${id} — long-only rebalance refused`)
     if (p.currency && p.currency !== baseCurrency) {
@@ -133,7 +140,9 @@ export function planRebalance(input: {
     .reduce((sum, o) => sum.plus(remaining(o.order)), new Decimal(0))
 
   const weights = new Map(target.weights.map((w) => [w.aliceId, new Decimal(w.weight)]))
-  const universe = [...new Set([...weights.keys(), ...held.keys()])].sort()
+  // `listed`: holdings outside the target are not this strategy's — leave them.
+  const managed = scope === 'listed' ? [...weights.keys()] : [...weights.keys(), ...held.keys()]
+  const universe = [...new Set(managed)].sort()
 
   const sells: PlannedOrder[] = []
   const buys: PlannedOrder[] = []

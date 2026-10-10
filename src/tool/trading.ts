@@ -737,12 +737,16 @@ Refuses: weights + cashWeight not summing to 1, negative weights, an expired tar
         })).describe('Target weights per instrument; omitted held instruments are sold'),
         cashWeight: z.string().describe('Decimal string; weights + cashWeight = 1'),
         minTradeValue: positiveNumeric.optional().describe('Skip trades below this notional (account currency)'),
+        scope: z.enum(['account', 'listed']).optional().describe('"listed": manage only the instruments in weights and leave other holdings untouched (strategy sleeve). Default "account": sell every holding not in the target.'),
+        capital: positiveNumeric.optional().describe('Budget the weights apply to (account currency); default net liquidation'),
         dryRun: z.boolean().default(false).describe('Preview only — stage nothing'),
       }).meta({ examples: [{ source: 'ibkr-paper', strategy: 'equal-weight', strategyVersion: '1', validUntil: '2026-10-10T20:00:00Z', weights: [{ aliceId: 'ibkr-paper|SPY', weight: '0.5' }, { aliceId: 'ibkr-paper|IEF', weight: '0.45' }], cashWeight: '0.05', dryRun: true }] }),
-      execute: async ({ source, dryRun, minTradeValue, provenance, decisionAt, ...rest }) => {
+      execute: async ({ source, dryRun, minTradeValue, scope, capital, provenance, decisionAt, ...rest }) => {
         const uta = await manager.resolveOne(source)
         const target = { ...rest, decisionAt: decisionAt ?? new Date().toISOString(), ...(provenance && { source: provenance }) }
-        const policy = minTradeValue ? { minTradeValue } : undefined
+        const policy = minTradeValue || scope || capital
+          ? { ...(minTradeValue && { minTradeValue }), ...(scope && { scope }), ...(capital && { capital }) }
+          : undefined
         if (dryRun) return { source: uta.id, plan: await uta.planRebalance(target, policy) }
         return { source: uta.id, ...await uta.stageRebalance(target, policy) }
       },
