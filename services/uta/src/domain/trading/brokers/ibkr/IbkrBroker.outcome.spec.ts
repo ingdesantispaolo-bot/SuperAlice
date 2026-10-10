@@ -69,7 +69,7 @@ describe('IbkrBroker — write outcome after send', () => {
 
   it('a request-validation refusal (e.g. Read-Only API, code 321) is definitive, not unknown', async () => {
     const { broker, bridge } = brokerWithTws()
-    bridge.requestOrder.mockRejectedValueOnce(classifyIbkrError(321, 'Error validating request.-'bN' : cause - The API interface is currently in Read-Only mode.'))
+    bridge.requestOrder.mockRejectedValueOnce(classifyIbkrError(321, "Error validating request.-'bN' : cause - The API interface is currently in Read-Only mode."))
     const { contract, order } = aaplLimitBuy()
 
     const result = await broker.placeOrder(contract, order)
