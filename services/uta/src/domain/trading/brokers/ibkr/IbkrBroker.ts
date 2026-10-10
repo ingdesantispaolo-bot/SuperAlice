@@ -23,6 +23,7 @@ import {
   OrderState,
   ContractDescription,
   type ContractDetails,
+  type BarData,
 } from '@traderalice/ibkr'
 import {
   BrokerError,
@@ -39,11 +40,14 @@ import {
   type TpSlParams,
   type ExpandContractFilters,
   type ContractExpansion,
+  type Bar,
+  type BarParams,
 } from '../types.js'
 import '../../contract-ext.js'
 import { derivePositionMath } from '../../position-math.js'
 import { RequestBridge } from './request-bridge.js'
 import { resolveSymbol } from './ibkr-contracts.js'
+import { buildHistoricalRequest, toBars, IBKR_BAR_INTERVALS } from './ibkr-historical.js'
 import type { IbkrBrokerConfig } from './ibkr-types.js'
 
 /**
@@ -72,6 +76,8 @@ function writeFailure(err: unknown, sentOrderId: number | null): PlaceOrderResul
 }
 
 const WRITE_LIVENESS_TIMEOUT_MS = 5_000
+/** Multi-year daily requests can take TWS tens of seconds. */
+const HISTORICAL_TIMEOUT_MS = 60_000
 /** A single unanswered currentTime is not proof of a dead socket (seen live on
  *  a healthy paper session): retry once before refusing the write. */
 const WRITE_LIVENESS_ATTEMPTS = 2
@@ -935,7 +941,28 @@ export class IbkrBroker implements IBroker {
     return {
       supportedSecTypes: ['STK', 'OPT', 'FUT', 'FOP', 'CASH', 'WAR', 'BOND'],
       supportedOrderTypes: ['MKT', 'LMT', 'STP', 'STP LMT', 'TRAIL', 'MOC', 'LOC', 'REL'],
+      historicalBars: { supported: true, quality: 'subscription', supportedBarSizes: IBKR_BAR_INTERVALS },
     }
+  }
+
+  // ==================== Historical bars ====================
+
+  /**
+   * OHLCV bars via reqHistoricalData. Regular trading hours only; daily bars
+   * are dated at UTC midnight of the session date. Errors (pacing, no
+   * permissions — code 162) arrive by reqId and reject the request.
+   */
+  async getHistorical(contract: Contract, params: BarParams): Promise<Bar[]> {
+    this._ensureAlive()
+    const routed = await this.resolveRoutableContract(contract)
+    const request = buildHistoricalRequest(params, new Date())
+    const reqId = this.bridge.allocReqId()
+    const promise = this.bridge.requestCollector<BarData>(reqId, HISTORICAL_TIMEOUT_MS)
+    this.client.reqHistoricalData(
+      reqId, routed, request.endDateTime, request.durationStr, request.barSizeSetting,
+      request.whatToShow, request.useRTH, request.formatDate, false, [],
+    )
+    return toBars(await promise, params)
   }
 
   // ==================== Contract identity ====================

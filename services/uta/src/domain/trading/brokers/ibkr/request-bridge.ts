@@ -25,6 +25,7 @@ import {
   type OrderState,
   type EClient,
   type TickAttrib,
+  type BarData,
 } from '@traderalice/ibkr'
 import { BrokerError, type BrokerConnectionStateEvent } from '../types.js'
 import { classifyIbkrError } from './ibkr-contracts.js'
@@ -534,6 +535,16 @@ export class RequestBridge extends DefaultEWrapper {
   }
 
   override contractDetailsEnd(reqId: number): void {
+    this.resolveCollector(reqId)
+  }
+
+  // ---- Historical bars (collector; errors route by reqId) ----
+
+  override historicalData(reqId: number, bar: BarData): void {
+    this.pushCollector(reqId, bar)
+  }
+
+  override historicalDataEnd(reqId: number, _start: string, _end: string): void {
     this.resolveCollector(reqId)
   }
 

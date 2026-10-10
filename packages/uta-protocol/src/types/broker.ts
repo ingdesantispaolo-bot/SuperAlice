@@ -341,8 +341,10 @@ export type BarInterval = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w
 /**
  * What price stream the bars represent. Mirrors IBKR `whatToShow`; other
  * brokers only support TRADES (the default) and ignore non-TRADES values.
+ * ADJUSTED_LAST (IBKR) = trades adjusted for splits and dividends; the
+ * window always runs to now.
  */
-export type BarWhatToShow = 'TRADES' | 'MIDPOINT' | 'BID' | 'ASK'
+export type BarWhatToShow = 'TRADES' | 'MIDPOINT' | 'BID' | 'ASK' | 'ADJUSTED_LAST'
 
 export interface BarParams {
   /** Normalized interval; the broker maps it to its native bar size. */
