@@ -5,6 +5,11 @@ tokens, entrance/disclosure behavior, and reduced-motion policy. It complements
 the component conventions in `ui/src/index.css` and the shared shell components
 under `ui/src/components/`.
 
+The shared shadcn Tailwind utilities are vendored at
+`ui/src/theme/vendor/shadcn-tailwind.css`, with their MIT license beside them.
+`ui/src/index.css` imports this static file. The application does not need the
+shadcn component-generator CLI or its transitive tooling dependencies.
+
 ## Product Intent
 
 OpenAlice is a working console, not a static report. Motion should make the

@@ -169,7 +169,7 @@ describe('createTradingTools — getOrders summarization', () => {
 
     // Mock getOrders to return a raw OpenOrder with UNSET fields
     const uta = mgr.resolve('mock-paper')[0]
-    vi.spyOn(uta, 'getPendingOrderIds').mockReturnValue([{ orderId: 'ord-1', symbol: 'AAPL' }])
+    vi.spyOn(uta, 'getPendingOrderIds').mockReturnValue([{ orderId: 'ord-1', symbol: 'AAPL', status: 'submitted' }])
     vi.spyOn(uta, 'getOrders').mockResolvedValue([makeOpenOrder()])
 
     const result = await (tools.getOrders.execute as Function)({ source: 'mock-paper' })
@@ -194,7 +194,7 @@ describe('createTradingTools — getOrders summarization', () => {
     const tools = createTradingTools(asSDK(mgr))
 
     const uta = mgr.resolve('mock-paper')[0]
-    vi.spyOn(uta, 'getPendingOrderIds').mockReturnValue([{ orderId: 'ord-2', symbol: 'AAPL' }])
+    vi.spyOn(uta, 'getPendingOrderIds').mockReturnValue([{ orderId: 'ord-2', symbol: 'AAPL', status: 'submitted' }])
     const openOrder = makeOpenOrder({ lmtPrice: '150', orderType: 'LMT' })
     openOrder.tpsl = { takeProfit: { price: '160' }, stopLoss: { price: '140' } }
     vi.spyOn(uta, 'getOrders').mockResolvedValue([openOrder])
@@ -212,7 +212,7 @@ describe('createTradingTools — getOrders summarization', () => {
     const tools = createTradingTools(asSDK(mgr))
 
     const uta = mgr.resolve('mock-paper')[0]
-    vi.spyOn(uta, 'getPendingOrderIds').mockReturnValue([{ orderId: 'ord-1', symbol: 'ETH' }])
+    vi.spyOn(uta, 'getPendingOrderIds').mockReturnValue([{ orderId: 'ord-1', symbol: 'ETH', status: 'submitted' }])
     const openOrder = makeOpenOrder({ symbol: 'ETH', orderType: 'LMT' })
     openOrder.order.lmtPrice = new Decimal('0.00001234')
     vi.spyOn(uta, 'getOrders').mockResolvedValue([openOrder])
@@ -229,7 +229,7 @@ describe('createTradingTools — getOrders summarization', () => {
     const tools = createTradingTools(asSDK(mgr))
 
     const uta = mgr.resolve('mock-paper')[0]
-    vi.spyOn(uta, 'getPendingOrderIds').mockReturnValue([{ orderId: 'uuid-abc-123', symbol: 'AAPL' }])
+    vi.spyOn(uta, 'getPendingOrderIds').mockReturnValue([{ orderId: 'uuid-abc-123', symbol: 'AAPL', status: 'submitted' }])
     vi.spyOn(uta, 'getOrders').mockResolvedValue([makeOpenOrder()])
 
     const result = await (tools.getOrders.execute as Function)({ source: 'mock-paper' })
@@ -244,9 +244,9 @@ describe('createTradingTools — getOrders summarization', () => {
 
     const uta = mgr.resolve('mock-paper')[0]
     vi.spyOn(uta, 'getPendingOrderIds').mockReturnValue([
-      { orderId: 'ord-1', symbol: 'AAPL' },
-      { orderId: 'ord-2', symbol: 'AAPL' },
-      { orderId: 'ord-3', symbol: 'ETH' },
+      { orderId: 'ord-1', symbol: 'AAPL', status: 'submitted' },
+      { orderId: 'ord-2', symbol: 'AAPL', status: 'submitted' },
+      { orderId: 'ord-3', symbol: 'ETH', status: 'submitted' },
     ])
     vi.spyOn(uta, 'getOrders').mockResolvedValue([
       makeOpenOrder({ symbol: 'AAPL', action: 'BUY' }),

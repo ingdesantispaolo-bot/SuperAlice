@@ -852,7 +852,8 @@ describe('DeliveryManager connector registry', () => {
 
 it('owns reply syntax, sends final files once, and preserves ordinary syntax discussions', async () => {
   const adapter = new FakeThirdPartyAdapter() as FakeThirdPartyAdapter & {
-    sendOwnerChat: ReturnType<typeof vi.fn>; sendOwnerFile: ReturnType<typeof vi.fn>
+    sendOwnerChat: ReturnType<typeof vi.fn<NonNullable<ConnectorAdapter['sendOwnerChat']>>>
+    sendOwnerFile: ReturnType<typeof vi.fn<NonNullable<ConnectorAdapter['sendOwnerFile']>>>
   }
   adapter.sendOwnerChat = vi.fn(async () => undefined)
   adapter.sendOwnerFile = vi.fn(async () => undefined)
@@ -900,11 +901,12 @@ it('owns reply syntax, sends final files once, and preserves ordinary syntax dis
 
 it('renders market snapshots in prose order without Workspace files, and retains failures', async () => {
   const adapter = new FakeThirdPartyAdapter() as FakeThirdPartyAdapter & {
-    sendOwnerChat: ReturnType<typeof vi.fn>; sendOwnerFile: ReturnType<typeof vi.fn>
+    sendOwnerChat: ReturnType<typeof vi.fn<NonNullable<ConnectorAdapter['sendOwnerChat']>>>
+    sendOwnerFile: ReturnType<typeof vi.fn<NonNullable<ConnectorAdapter['sendOwnerFile']>>>
   }
   const order: string[] = []
   adapter.sendOwnerChat = vi.fn(async message => { order.push(message.text ?? '') })
-  adapter.sendOwnerFile = vi.fn(async (_file, media) => { order.push(media) })
+  adapter.sendOwnerFile = vi.fn(async (_file, media) => { order.push(media ?? 'file') })
   vi.spyOn(adapter, 'sendOwnerText').mockImplementation(async text => { order.push(text) })
   const registry = new ConnectorRegistry()
   registry.register({ definition: { id: adapter.id, label: 'Test', description: '', fields: [], commands: [] }, create: () => adapter })

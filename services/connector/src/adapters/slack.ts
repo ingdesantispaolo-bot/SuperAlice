@@ -54,7 +54,7 @@ export class SlackConnectorAdapter implements ConnectorAdapter {
       const web = new WebClient(botToken)
       const socket = new SocketModeClient({
         appToken,
-        ...(this.proxy.dispatcher ? { dispatcher: this.proxy.dispatcher } : {}),
+        ...(this.proxy.slackDispatcher ? { dispatcher: this.proxy.slackDispatcher } : {}),
       })
       this.web = web
       this.socket = socket

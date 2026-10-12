@@ -262,6 +262,21 @@ describe('PushApprovalPanel localization', () => {
 })
 
 describe('PushApprovalPanel unknown dispatch outcomes', () => {
+  it('keeps unresolved accounts blocked when no history row is available', async () => {
+    await i18n.changeLanguage('en')
+    mocks.walletStatus.mockResolvedValue({
+      staged: [], pendingMessage: null, head: '3f9a1c2e', commitCount: 1,
+      unresolved: [{ commitHash: '3f9a1c2e', operationIndex: 0, action: 'placeOrder', symbol: 'MSFT', timestamp: '2026-10-09T10:00:00.000Z' }],
+    })
+    mocks.walletLog.mockResolvedValue({ commits: [] })
+
+    render(<PushApprovalPanel />)
+
+    expect((await screen.findAllByText('Blocked: 1 unknown outcome(s)')).length).toBeGreaterThan(0)
+    expect(screen.queryByText('Working tree clean')).toBeNull()
+    expect((await screen.findAllByText('1 with unknown outcome — new orders are blocked until resolved')).length).toBeGreaterThan(0)
+  })
+
   it('flags the queue as blocked and the commit as outcome unknown, never as a clean push', async () => {
     await i18n.changeLanguage('en')
     mocks.walletStatus.mockResolvedValue({

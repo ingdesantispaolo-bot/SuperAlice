@@ -19,6 +19,8 @@ it('shares preparation reads and retries across entry points and refreshes inven
   render(<ProjectWorkspaceSetupProvider><Probe name="settings" /><Probe name="harness" /></ProjectWorkspaceSetupProvider>)
   await screen.findByText('settings: complete')
   expect(fetchJson).toHaveBeenCalledOnce()
+  // The completion text can render before its inventory refresh effect runs.
+  await waitFor(() => expect(mocks.refresh).toHaveBeenCalledTimes(3))
   const initialRefreshes = mocks.refresh.mock.calls.length
   act(() => { screen.getByText('settings: complete').click(); screen.getByText('harness: complete').click() })
   await waitFor(() => expect(fetchJson).toHaveBeenCalledTimes(2))

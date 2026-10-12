@@ -8,7 +8,8 @@ import {
   getGlobalDispatcher,
   setGlobalDispatcher,
   type Dispatcher,
-} from 'undici'
+} from 'undici6'
+import { EnvHttpProxyAgent as SlackProxyAgent, type Dispatcher as SlackDispatcher } from 'undici'
 
 type EnvLike = Readonly<Record<string, string | undefined>>
 
@@ -28,6 +29,7 @@ export interface ConnectorProxySettings {
 export interface ConnectorProxyTransport {
   readonly active: boolean
   readonly dispatcher?: Dispatcher
+  readonly slackDispatcher?: SlackDispatcher
   readonly nodeFetchAgent?: (url: URL) => NodeHttpAgent
   close(): Promise<void>
 }
@@ -66,6 +68,7 @@ export function installConnectorProxyTransport(
   if (!settings.httpProxy && !settings.httpsProxy) return DIRECT_CONNECTOR_PROXY_TRANSPORT
 
   const dispatcher = new EnvHttpProxyAgent(settings)
+  const slackDispatcher = new SlackProxyAgent(settings)
   const previousDispatcher = getGlobalDispatcher()
   setGlobalDispatcher(dispatcher)
 
@@ -91,6 +94,7 @@ export function installConnectorProxyTransport(
   return {
     active: true,
     dispatcher,
+    slackDispatcher,
     nodeFetchAgent,
     close: async () => {
       if (closed) return
@@ -99,7 +103,7 @@ export function installConnectorProxyTransport(
       for (const agent of agents.values()) agent.destroy()
       directHttp.destroy()
       directHttps.destroy()
-      await dispatcher.close()
+      await Promise.all([dispatcher.close(), slackDispatcher.close()])
     },
   }
 }

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { getGlobalDispatcher } from 'undici'
+import { createServer } from 'node:http'
+import { getGlobalDispatcher, request as discordRequest } from 'undici6'
+import { request as slackRequest } from 'undici'
 
 import {
   installConnectorProxyTransport,
@@ -57,5 +59,26 @@ describe('Connector proxy transport', () => {
     expect(transport.nodeFetchAgent?.(new URL('https://api.telegram.org'))).toBeDefined()
     await transport.close()
     expect(getGlobalDispatcher()).toBe(previous)
+  })
+
+  it('honors NO_PROXY with both SDK dispatchers and closes their connections', async () => {
+    const server = createServer((_req, res) => res.end('local fixture'))
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('Missing fixture port')
+    const transport = installConnectorProxyTransport({
+      HTTPS_PROXY: 'http://127.0.0.1:9', NO_PROXY: '*',
+    })
+    transports.push(transport)
+    try {
+      const url = `http://127.0.0.1:${address.port}`
+      const discord = await discordRequest(url, { dispatcher: transport.dispatcher })
+      expect(await discord.body.text()).toBe('local fixture')
+      const slack = await slackRequest(url, { dispatcher: transport.slackDispatcher })
+      expect(await slack.body.text()).toBe('local fixture')
+    } finally {
+      await transport.close()
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+    }
   })
 })

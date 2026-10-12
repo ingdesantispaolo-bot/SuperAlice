@@ -284,8 +284,9 @@ does not start or manage the proxy process.
 `OPENALICE_PROXY_URL` accepts only HTTP(S) URLs; malformed or SOCKS-only values
 are ignored rather than injected as child proxy settings.
 
-Connector Service owns one shared proxy transport. It installs an Undici
-dispatcher for fetch/WebSocket SDKs and gives adapters an explicit Node agent
+Connector Service owns one shared proxy transport. It keeps separate patched
+Undici dispatchers for Discord's v6 API and Slack Socket Mode's v7 API, closes
+both on shutdown, and gives adapters an explicit Node agent
 selector for libraries such as grammY that create their own `node-fetch`
 transport. New adapters must consume this shared context instead of reading
 environment variables or changing `http.globalAgent` / `https.globalAgent`

@@ -113,7 +113,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
     "@hono/node-server": "^2.0.12",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@traderalice/connector-protocol": "workspace:*",
     "@traderalice/guardian-runtime": "workspace:*",
     "@traderalice/ibkr": "workspace:*",
@@ -122,13 +122,13 @@
     "@traderalice/uta-protocol": "workspace:*",
     "@xterm/addon-serialize": "0.15.0-beta.287",
     "@xterm/headless": "6.1.0-beta.287",
-    "ai": "^6.0.86",
+    "ai": "^6.0.303",
     "chardet": "2.2.0",
     "cron-parser": "^5.6.1",
     "decimal.js": "^10.6.0",
     "dugite": "3.2.2",
     "electron-updater": "^6.8.9",
-    "hono": "^4.12.32",
+    "hono": "^4.13.7",
     "iconv-lite": "0.7.2",
     "node-pty": "^1.1.0",
     "openai": "^6.33.0",
@@ -145,7 +145,7 @@
     "directories": {
       "output": "dist/electron-app"
     },
-    "electronVersion": "39.8.10",
+    "electronVersion": "41.10.6",
     "asar": true,
     "files": [
       "dist/*.js",
@@ -225,7 +225,7 @@
     "afterPack": "../../scripts/desktop-after-pack.mjs"
   },
   "devDependencies": {
-    "@ai-sdk/provider": "^3.0.8",
+    "@ai-sdk/provider": "^3.0.18",
     "@electron/asar": "^4.3.0",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -233,13 +233,13 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
-    "@vitest/coverage-v8": "^4.1.5",
+    "@vitest/coverage-v8": "^4.1.11",
     "jsdom": "^29.0.0",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "turbo": "^2.9.14",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.5",
+    "vitest": "^4.1.11",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.18.2",

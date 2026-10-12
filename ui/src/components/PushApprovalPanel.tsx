@@ -651,6 +651,8 @@ export function PushApprovalPanel() {
                   />
                 ))}
               </div>
+            ) : unresolvedCount > 0 ? (
+              <BlockedQueue count={unresolvedCount} />
             ) : verificationIncomplete ? (
               <UnverifiedQueue />
             ) : (
@@ -680,6 +682,7 @@ export function PushApprovalPanel() {
           </div>
           <ReviewDetail
             item={selected}
+            unresolvedCount={unresolvedCount}
             verificationIncomplete={verificationIncomplete}
             lastResult={lastResult}
             error={error}
@@ -826,6 +829,19 @@ function QueueRow({
   )
 }
 
+function BlockedQueue({ count }: { count: number }) {
+  const { t } = useTranslation()
+  return (
+    <div className="flex min-h-full items-center justify-center p-6">
+      <EmptyState
+        icon={<AlertTriangle size={24} className="text-warning" aria-hidden />}
+        title={t('tradingReview.queue.blocked', { count })}
+        description={t('tradingReview.unresolvedResult', { count })}
+      />
+    </div>
+  )
+}
+
 function CleanQueue() {
   const { t } = useTranslation()
   return (
@@ -854,6 +870,7 @@ function UnverifiedQueue() {
 
 function ReviewDetail({
   item,
+  unresolvedCount,
   verificationIncomplete,
   lastResult,
   error,
@@ -867,6 +884,7 @@ function ReviewDetail({
   onDismissResult,
 }: {
   item: ReviewItem | null
+  unresolvedCount: number
   verificationIncomplete: boolean
   lastResult: { accountId: string; data: WalletPushResult } | null
   error: string | null
@@ -881,6 +899,7 @@ function ReviewDetail({
 }) {
   const { t } = useTranslation()
   if (!item) {
+    if (unresolvedCount > 0) return <BlockedQueue count={unresolvedCount} />
     return (
       <div className="flex min-h-full items-center justify-center p-6">
         <EmptyState

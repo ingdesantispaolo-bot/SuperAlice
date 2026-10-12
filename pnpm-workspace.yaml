@@ -19,27 +19,30 @@ minimumReleaseAgeExclude:
   - '@earendil-works/pi-tui@0.83.0'
 
 overrides:
-  '@alpacahq/alpaca-trade-api>axios': ^0.33.0
+  '@alpacahq/alpaca-trade-api>axios': ^0.34.0
+  '@alpacahq/alpaca-trade-api>msgpack5': ^6.1.0
   '@alpacahq/alpaca-trade-api>eslint': '-'
   '@babel/core': ^7.29.6
   '@hono/node-server': ^2.0.12
+  # v5 preserves downloadArtifact and uses native fetch instead of got/global-agent.
+  '@electron/get': ^5.0.0
   body-parser: ^2.3.0
-  'brace-expansion@^1.0.0': 5.0.8
-  'brace-expansion@^2.0.0': 5.0.8
-  'brace-expansion@>=3.0.0': 5.0.8
+  'brace-expansion@^1.0.0': 5.0.12
+  'brace-expansion@^2.0.0': 5.0.12
+  'brace-expansion@>=3.0.0': 5.0.12
   esbuild: ^0.28.1
-  fast-uri: ^3.1.4
-  hono: ^4.12.32
-  js-yaml: ^4.3.0
+  fast-uri: ^3.1.8
+  hono: ^4.13.7
+  js-yaml: ^4.3.2
   postcss: ^8.5.18
   protobufjs: ^7.6.5
   tar: ^7.5.22
-  qs: ^6.15.2
-  ip-address: ^10.1.1
+  qs: ^6.16.0
+  ip-address: ^10.7.1
   tmp: ^0.2.6
   form-data: ^4.0.6
-  undici@^6.0.0: ^6.27.0
-  undici@^7.0.0: ^7.28.0
+  undici@^6.0.0: ^6.28.1
+  undici@^7.0.0: ^7.29.1
   ws@^7.0.0: ^7.5.11
   ws@^8.0.0: ^8.20.1
   lodash: ^4.18.0
@@ -51,6 +54,24 @@ overrides:
   rollup: ^4.59.0
   vitest>vite: ^7.3.5
   '@vitest/mocker>vite': ^7.3.5
+  # Patched transitive releases; retain separate major branches where required.
+  '@ai-sdk/provider-utils@^4.0.0': ^4.0.33
+  '@xmldom/xmldom@^0.8.0': ^0.8.15
+  '@xmldom/xmldom@^0.9.0': ^0.9.12
+  'axios@^1.0.0': ^1.20.0
+  baseline-browser-mapping: ^2.11.0
+  browserslist: ^4.28.7
+  http-cache-semantics: ^4.3.0
+  'nanoid@^3.0.0': ^3.3.18
+  postcss-selector-parser: ^7.1.6
+  prosemirror-view: ^1.42.3
+  proxy-addr: ^2.0.8
+  source-map-js: ^1.2.2
+  # Match the exact peers of the pinned Tiptap 3.30.5 React editor.
+  '@tiptap/extension-bubble-menu': 3.30.5
+  '@tiptap/extension-floating-menu': 3.30.5
+  # isows accepts any ws major; keep its peer aligned with the root ws runtime.
+  isows>ws: 8.21.0
 
 patchedDependencies:
   # Adapted from stablyai/orca@ab0f220. See THIRD_PARTY_NOTICES.md.

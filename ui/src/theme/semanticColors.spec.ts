@@ -48,6 +48,9 @@ const ALLOWED_LITERAL_COLOR_FILES = new Set([
   // An origin-less document has no access to parent CSS variables; these are
   // safe fallback colors for unstyled agent-authored HTML, not app chrome.
   resolve(uiRoot, 'src/components/HtmlReportView.tsx'),
+  // Existing third-party alpha-mask utilities use black/white as mask values,
+  // not product palette colors. They previously lived outside src/ in shadcn.
+  resolve(uiRoot, 'src/theme/vendor/shadcn-tailwind.css'),
 ])
 
 function productionStyleFiles(directory: string): string[] {

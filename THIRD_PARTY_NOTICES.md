@@ -1,5 +1,14 @@
 # Third-Party Notices
 
+## shadcn Tailwind utilities
+
+`ui/src/theme/vendor/shadcn-tailwind.css` is copied from the `shadcn` 4.16.1
+package's `dist/tailwind.css`. The original MIT license is retained beside it
+in `shadcn-LICENSE.txt`. Keeping these static utilities locally avoids installing
+the unused component-generator CLI and its dependency graph.
+
+Source: https://github.com/shadcn-ui/ui
+
 ## Oh My Pi TUI interaction primitives
 
 `packages/cli/src/supervisor-tui-pointer.ts` and the surrounding Supervisor
