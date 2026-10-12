@@ -17,6 +17,7 @@ import type { InboxOrigin } from '../core/inbox-store.js'
 import { extractMcpShape, wrapToolExecute } from '../core/mcp-export.js'
 import { registerCliRoutes } from './cli.js'
 import { resolveInboxOrigin } from './inbox-origin.js'
+import { localRequestGuard } from './local-request-guard.js'
 import { createWorkspaceConversationControl } from '../workspaces/conversation-control.js'
 import { sessionCoworkerLabel } from '../workspaces/session-registry.js'
 
@@ -198,6 +199,9 @@ export class McpPlugin implements Plugin {
 
     const app = new Hono()
 
+    // Loopback is not a browser boundary: refuse foreign Origin/Host and
+    // simple-request bodies before CORS (MCP clients are local processes).
+    app.use('*', localRequestGuard())
     app.use('*', cors({
       origin: '*',
       allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],

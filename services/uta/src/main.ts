@@ -36,6 +36,7 @@ import { buildKeylessDataUTAs } from './domain/trading/keyless-data-sources.js'
 import { createTradingRoutes } from './http/routes-trading.js'
 import { createSimulatorRoutes } from './http/routes-simulator.js'
 import type { UTAEngineContext } from './types.js'
+import { localRequestGuard } from './http/local-request-guard.js'
 
 const UTA_PORT = Number(process.env['OPENALICE_UTA_PORT'] ?? 47333)
 const CATALOG_REFRESH_MS = 6 * 60 * 60 * 1000  // 6h
@@ -145,6 +146,7 @@ export async function startUTAService(): Promise<void> {
   // ==================== HTTP app ====================
 
   const app = new Hono()
+  app.use('*', localRequestGuard())
 
   // Health probe — used by Guardian readiness gate and Alice BFF supervisor.
   app.get('/__uta/health', (c) => c.json({

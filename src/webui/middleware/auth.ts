@@ -79,7 +79,11 @@ export function createAuthMiddleware(opts: AuthMiddlewareOptions): MiddlewareHan
     if (trustedProxies.size === 0) {
       const clientIp = getSocketRemoteAddress(c)
       const origin = c.req.header('origin')
-      if (clientIp && isLoopbackIp(clientIp) && (!origin || isTrustedLocalOrigin(origin))) {
+      // The Host check closes DNS rebinding: a page on a foreign domain that
+      // resolves to 127.0.0.1 reaches this socket, and its same-origin GETs
+      // carry no Origin header at all.
+      if (clientIp && isLoopbackIp(clientIp) && isLocalHostHeader(c.req.header('host'))
+        && (!origin || isTrustedLocalOrigin(origin))) {
         return next()
       }
     }
@@ -146,6 +150,14 @@ export function isLoopbackIp(ip: string): boolean {
   // IPv4 — accept the entire 127.0.0.0/8 range, not just 127.0.0.1
   if (/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(norm)) return true
   return false
+}
+
+/** Host header naming this machine (127.0.0.1, localhost, *.localhost, [::1]).
+ * Browsers always send Host; only non-browser transports may omit it. */
+export function isLocalHostHeader(host: string | undefined): boolean {
+  if (!host) return true
+  const name = (host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host.split(':')[0]).toLowerCase()
+  return name === '127.0.0.1' || name === 'localhost' || name.endsWith('.localhost') || name === '[::1]'
 }
 
 /** Browser origins that are owned by a local OpenAlice surface. This keeps

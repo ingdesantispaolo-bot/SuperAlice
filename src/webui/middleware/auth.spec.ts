@@ -224,6 +224,24 @@ describe('auth middleware — playbook 03 (localhost spoofing)', () => {
     }, envWithIp('203.0.113.5'))
     expect(res.status).toBe(401)
   })
+
+  it('DNS rebinding: a loopback socket with a foreign Host needs a session', async () => {
+    // A page on rebind.evil.example resolved to 127.0.0.1: same-origin GET,
+    // no Origin header, loopback socket — only the Host gives it away.
+    const app = makeApp({ trustedProxies: [], csrfTrustedOrigins: [] })
+    const res = await app.request('/api/trading/uta', {
+      headers: { host: 'rebind.evil.example:47331' },
+    }, envWithIp('127.0.0.1'))
+    expect(res.status).toBe(401)
+  })
+
+  it('local Host names keep the loopback bypass', async () => {
+    const app = makeApp({ trustedProxies: [], csrfTrustedOrigins: [] })
+    for (const host of ['127.0.0.1:47331', 'localhost:5173', '[::1]:47331', 'studio-x.localhost:47331']) {
+      const res = await app.request('/api/trading/uta', { headers: { host } }, envWithIp('127.0.0.1'))
+      expect(res.status, host).toBe(200)
+    }
+  })
 })
 
 describe('auth middleware — playbook 02 (CSRF)', () => {
