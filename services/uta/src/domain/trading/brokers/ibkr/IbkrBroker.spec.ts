@@ -376,6 +376,31 @@ describe('IbkrBroker — getAccount mixed-currency math (ANG-101 / issues #295 #
     expect(a.netLiquidation).toBe('3913.1')
   })
 
+  it('reads the base currency from the currency TWS tags NetLiquidation with', async () => {
+    // Shape observed on a EUR-based paper account (2026-10-12): no BaseCurrency
+    // tag; per-currency families carry a BASE line; ExchangeRate is per unit → EUR.
+    const b = brokerWithCache({
+      NetLiquidation: '1092204.96', 'NetLiquidation:EUR': '1092204.96',
+      TotalCashValue: '516529.00', 'TotalCashValue:EUR': '516529.00',
+      'CashBalance:BASE': '516528.9963', 'CashBalance:USD': '-254336.61',
+      'ExchangeRate:BASE': '1.00', 'ExchangeRate:EUR': '1.00', 'ExchangeRate:USD': '0.8924608',
+      RealizedPnL: '0', BuyingPower: '0', InitMarginReq: '0', MaintMarginReq: '0',
+    }, [{ ...usdPos, multiplier: '1', quantity: '10', side: 'long' }])
+    const a = await b.getAccount()
+    expect(a.baseCurrency).toBe('EUR')
+    expect(a.netLiquidation).toBe('1092204.96')
+    // USD position PnL converted at the USD → EUR rate, not taken at face value
+    expect(Number(a.unrealizedPnL)).toBeCloseTo(368.80 * 0.8924608, 4)
+  })
+
+  it('keeps the USD default when TWS sends no currency-tagged totals', async () => {
+    const b = brokerWithCache({
+      TotalCashValue: '1000', NetLiquidation: '1000',
+      RealizedPnL: '0', BuyingPower: '0', InitMarginReq: '0', MaintMarginReq: '0',
+    }, [])
+    expect((await b.getAccount()).baseCurrency).toBe('USD')
+  })
+
   it('reconstructs NetLiquidation when the broker value is non-finite', async () => {
     const b = brokerWithCache({
       TotalCashValue: '1000', NetLiquidation: 'NaN',

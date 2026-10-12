@@ -50,13 +50,6 @@ import { resolveSymbol } from './ibkr-contracts.js'
 import { buildHistoricalRequest, toBars, IBKR_BAR_INTERVALS } from './ibkr-historical.js'
 import type { IbkrBrokerConfig } from './ibkr-types.js'
 
-/**
- * Result for a write that failed. Before the request reached TWS the failure
- * is definitive. After it was sent, only IBKR's own refusal for that orderId
- * (classified EXCHANGE / AUTH) proves nothing is live; a timeout, a dropped
- * connection or an unclassified message leaves the outcome unknown — the
- * orderId is kept so sync can look the order up instead of re-sending it.
- */
 /** Live / delayed / frozen, from the marketDataType callback or delayed ticks. */
 function quoteDataType(snap: import('./ibkr-types.js').TickSnapshot): 'live' | 'delayed' | 'frozen' | undefined {
   if (snap.delayed || snap.marketDataType === 3 || snap.marketDataType === 4) return 'delayed'
@@ -65,6 +58,29 @@ function quoteDataType(snap: import('./ibkr-types.js').TickSnapshot): 'live' | '
   return undefined
 }
 
+/**
+ * The account's base currency. reqAccountUpdates has no "BaseCurrency" tag:
+ * single-valued tags (NetLiquidation, TotalCashValue) arrive tagged with the
+ * base currency itself, while per-currency families use "BASE" for their
+ * consolidated line. Without this a EUR account was reported as USD.
+ */
+function baseCurrencyFromTags(values: Map<string, string>): string | undefined {
+  for (const tag of ['NetLiquidation', 'TotalCashValue']) {
+    for (const key of values.keys()) {
+      const m = key.match(/^([A-Za-z]+):([A-Z]{3})$/)
+      if (m && m[1] === tag) return m[2]
+    }
+  }
+  return undefined
+}
+
+/**
+ * Result for a write that failed. Before the request reached TWS the failure
+ * is definitive. After it was sent, only IBKR's own refusal for that orderId
+ * (classified EXCHANGE / AUTH) proves nothing is live; a timeout, a dropped
+ * connection or an unclassified message leaves the outcome unknown — the
+ * orderId is kept so sync can look the order up instead of re-sending it.
+ */
 function writeFailure(err: unknown, sentOrderId: number | null): PlaceOrderResult {
   const error = err instanceof Error ? err.message : String(err)
   if (sentOrderId === null) return { success: false, error }
@@ -673,7 +689,7 @@ export class IbkrBroker implements IBroker {
     const download = this.bridge.getAccountCache()
     if (!download) throw new BrokerError('NETWORK', 'Account data not yet available')
 
-    const baseCurrency = download.values.get('BaseCurrency') ?? 'USD'
+    const baseCurrency = download.values.get('BaseCurrency') ?? baseCurrencyFromTags(download.values) ?? 'USD'
     const totalCashValue = new Decimal(download.values.get('TotalCashValue') ?? '0')
 
     let positionUnrealizedPnL: Decimal | null = new Decimal(0)
