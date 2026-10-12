@@ -6,7 +6,10 @@
 
 import Decimal from 'decimal.js'
 import { UNSET_DECIMAL, type Contract, type Order } from '@traderalice/ibkr'
-import type { OpenOrder, Position, Quote } from '../brokers/types.js'
+import type { AccountInfo, OpenOrder, Position, Quote } from '../brokers/types.js'
+import { instrumentCurrency, isFxConversion, toBase } from '../fx.js'
+
+type FxAccount = Pick<AccountInfo, 'baseCurrency' | 'fxRates'>
 
 export type Side = 'BUY' | 'SELL'
 
@@ -99,6 +102,37 @@ export function workingNotional(openOrders: readonly OpenOrder[], positions: rea
     total = total.plus(value)
   }
   return total
+}
+
+/** `orderNotional` in the account base currency; null when it cannot be priced or converted. */
+export function orderNotionalBase(account: FxAccount, contract: Contract, order: Order, quote?: Quote, position?: Position): Decimal | null {
+  const local = orderNotional(contract, order, quote, position)
+  return local === null ? null : toBase(account, local, instrumentCurrency(contract, quote, position))
+}
+
+/**
+ * `workingNotional` in the base currency. Currency conversions (CASH) are
+ * skipped: they move cash between currencies without adding exposure.
+ */
+export function workingNotionalBase(account: FxAccount, openOrders: readonly OpenOrder[], positions: readonly Position[], side: Side): Decimal | null {
+  let total = new Decimal(0)
+  for (const working of openOrders) {
+    if (orderSide(working.order) !== side || isFxConversion(working.contract)) continue
+    const status = working.orderState?.status
+    if (status && status !== 'Submitted' && status !== 'PreSubmitted') continue
+    const position = positionFor(positions, working.contract)
+    const value = orderNotionalBase(account, working.contract, working.order, undefined, position)
+    if (value === null) return null
+    total = total.plus(value)
+  }
+  return total
+}
+
+/** Absolute market value of a holding in the base currency, or null. */
+export function positionValueBase(account: FxAccount, position: Position): Decimal | null {
+  let value: Decimal
+  try { value = new Decimal(position.marketValue || '0').abs() } catch { return null }
+  return toBase(account, value, position.currency || position.contract.currency)
 }
 
 /** Quantity committed by working SELL orders on one instrument. */

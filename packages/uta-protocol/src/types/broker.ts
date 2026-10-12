@@ -266,6 +266,13 @@ export interface AccountInfo {
   initMarginReq?: string
   maintMarginReq?: string
   dayTradesRemaining?: number
+  /** Broker-provided conversion rates: 1 unit of the keyed currency =
+   *  `rate` units of `baseCurrency` (the base itself maps to "1"). Absent
+   *  when the broker does not report them; consumers that need a missing
+   *  rate must refuse rather than assume parity. */
+  fxRates?: Record<string, string>
+  /** Cash balance per currency, in that currency (negative = borrowed). */
+  cashBalances?: Record<string, string>
 }
 
 // ==================== Sub-accounts ====================

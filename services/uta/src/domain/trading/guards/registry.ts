@@ -8,6 +8,7 @@ import { MinCashGuard } from './min-cash.js'
 import { MaxOrdersPerDayGuard } from './max-orders-per-day.js'
 import { QuoteFreshnessGuard } from './quote-freshness.js'
 import { MaxDailyLossGuard } from './max-daily-loss.js'
+import { MaxPositionExposureGuard } from './max-position-exposure.js'
 
 const builtinGuards: GuardRegistryEntry[] = [
   { type: 'max-position-size',  create: (opts) => new MaxPositionSizeGuard(opts) },
@@ -19,6 +20,7 @@ const builtinGuards: GuardRegistryEntry[] = [
   { type: 'max-orders-per-day', create: (opts) => new MaxOrdersPerDayGuard(opts) },
   { type: 'quote-freshness',    create: (opts) => new QuoteFreshnessGuard(opts) },
   { type: 'max-daily-loss',     create: (opts) => new MaxDailyLossGuard(opts) },
+  { type: 'max-position-exposure', create: (opts) => new MaxPositionExposureGuard(opts) },
 ]
 
 const registry = new Map<string, GuardRegistryEntry['create']>(

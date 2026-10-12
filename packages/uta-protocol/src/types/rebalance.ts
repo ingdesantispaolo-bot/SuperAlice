@@ -27,7 +27,7 @@ export interface TargetPortfolio {
 }
 
 export interface RebalancePolicy {
-  /** Skip trades whose estimated notional is below this (account currency). Default 0. */
+  /** Skip trades whose estimated notional is below this (account base currency). Default 0. */
   minTradeValue?: string
   /** `account` (default): every held instrument not in the target is sold.
    *  `listed`: only instruments listed in the target are managed; other
@@ -45,7 +45,12 @@ export interface PlannedOrder {
   action: 'BUY' | 'SELL'
   quantity: string
   estimatedPrice: string
+  /** In the instrument's trading currency (`currency`). */
   estimatedNotional: string
+  /** Trading currency of the instrument. */
+  currency?: string
+  /** `estimatedNotional` in the account base currency, at the broker's rate. */
+  estimatedNotionalBase?: string
   currentQuantity: string
   workingBuy: string
   workingSell: string
@@ -59,6 +64,11 @@ export interface RebalancePlan {
   orders: PlannedOrder[]
   skipped: Array<{ aliceId: string; reason: string }>
   /** Cash after all planned orders at estimated prices — before fees and
-   *  before working orders that are still open. */
+   *  before working orders that are still open. In the base currency. */
   projectedCash: string
+  /** Per foreign currency: cash still missing after that currency's own
+   *  sells, to convert before the buys (amount in the currency, plus its
+   *  base equivalent). Absent when the broker reports no per-currency
+   *  balances; empty when nothing needs converting. */
+  fundingNeeds?: Array<{ currency: string; amount: string; baseEquivalent: string }>
 }

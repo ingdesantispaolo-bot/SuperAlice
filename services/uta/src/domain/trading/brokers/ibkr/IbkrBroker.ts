@@ -725,8 +725,24 @@ export class IbkrBroker implements IBroker {
       ? positionUnrealizedPnL
       : new Decimal(download.values.get('UnrealizedPnL') ?? '0')
 
+    // Per-currency families: "ExchangeRate:EUR", "CashBalance:USD", … (BASE
+    // is the consolidated line, not a currency).
+    const fxRates: Record<string, string> = { [baseCurrency]: '1' }
+    const cashBalances: Record<string, string> = {}
+    for (const [key, raw] of download.values) {
+      const m = key.match(/^(ExchangeRate|CashBalance):([A-Z]{3})$/)
+      if (!m) continue
+      let value: Decimal
+      try { value = new Decimal(raw) } catch { continue }
+      if (!value.isFinite()) continue
+      if (m[1] === 'ExchangeRate' && value.gt(0) && m[2] !== baseCurrency) fxRates[m[2]] = value.toString()
+      if (m[1] === 'CashBalance') cashBalances[m[2]] = value.toString()
+    }
+
     return {
       baseCurrency,
+      fxRates,
+      ...(Object.keys(cashBalances).length > 0 ? { cashBalances } : {}),
       netLiquidation: netLiquidation.toString(),
       totalCashValue: totalCashValue.toString(),
       unrealizedPnL: unrealizedPnL.toString(),

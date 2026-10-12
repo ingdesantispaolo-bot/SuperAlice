@@ -9,14 +9,20 @@
  * never doubles an order: once the first plan is executed (or still working)
  * the delta is zero.
  *
- * Pure: no broker calls. Anything that cannot be valued (missing quote,
- * foreign currency, short position) refuses the whole plan.
+ * Instruments in another currency are valued in the account base currency
+ * at the broker's own rates (`AccountInfo.fxRates`); the plan reports, per
+ * currency, the cash still missing after its sells (`fundingNeeds`), so a
+ * conversion can precede the buys instead of an implicit margin loan.
+ *
+ * Pure: no broker calls. Anything that cannot be valued (missing quote, a
+ * currency without a broker rate, short position) refuses the whole plan.
  */
 
 import Decimal from 'decimal.js'
 import { UNSET_DECIMAL } from '@traderalice/ibkr'
 import type { AccountInfo, OpenOrder, Position, Quote } from './brokers/types.js'
 import type { PlannedOrder, RebalancePlan, RebalancePolicy, TargetPortfolio, TargetWeight } from '@traderalice/uta-protocol'
+import { instrumentCurrency, isFxConversion, rateToBase } from './fx.js'
 
 export type { PlannedOrder, RebalancePlan, RebalancePolicy, TargetPortfolio, TargetWeight }
 
@@ -123,14 +129,12 @@ export function planRebalance(input: {
   const listedIds = new Set(target.weights.map((w) => w.aliceId))
   const held = new Map<string, Position>()
   for (const p of positions) {
-    if (p.quantity.isZero()) continue
+    // Currency balances some brokers report as CASH positions are cash, not holdings.
+    if (p.quantity.isZero() || isFxConversion(p.contract)) continue
     const id = aliceIdOf(p.contract)
     if (scope === 'listed' && !listedIds.has(id)) continue
     if (!id) throw new RebalanceError(`position ${p.contract.symbol ?? '?'} has no aliceId`)
     if (p.side !== 'long') throw new RebalanceError(`short position in ${id} — long-only rebalance refused`)
-    if (p.currency && p.currency !== baseCurrency) {
-      throw new RebalanceError(`position ${id} is in ${p.currency}, account base is ${baseCurrency} — FX conversion not supported`)
-    }
     held.set(id, p)
   }
 
@@ -148,14 +152,19 @@ export function planRebalance(input: {
   const buys: PlannedOrder[] = []
   const skipped: RebalancePlan['skipped'] = []
   let cash = dec(account.totalCashValue, 'account totalCashValue')
+  // Net cash flow per trading currency, in that currency (sells +, buys −).
+  const flows = new Map<string, Decimal>()
+  const addFlow = (ccy: string, amount: Decimal) => flows.set(ccy, (flows.get(ccy) ?? new Decimal(0)).plus(amount))
 
   for (const id of universe) {
     const quote = quotes.get(id)
     if (!quote) throw new RebalanceError(`no quote for ${id} — refusing to plan blind`)
-    const qc = (quote.contract as { currency?: string } | undefined)?.currency
-    if (qc && qc !== baseCurrency) {
-      throw new RebalanceError(`${id} trades in ${qc}, account base is ${baseCurrency} — FX conversion not supported`)
+    const currency = quote.contract ? instrumentCurrency(quote.contract, undefined, held.get(id)) : held.get(id)?.currency
+    const rate = rateToBase(account, currency)
+    if (!rate) {
+      throw new RebalanceError(`${id} trades in ${currency ?? 'an unknown currency'} and the broker reports no rate to ${baseCurrency} — refusing to plan`)
     }
+    const ccy = currency ?? baseCurrency
     const ask = dec(quote.ask, `ask of ${id}`)
     const bid = dec(quote.bid, `bid of ${id}`)
     if (!ask.gt(0) || !bid.gt(0)) throw new RebalanceError(`quote for ${id} has no usable bid/ask`)
@@ -167,7 +176,7 @@ export function planRebalance(input: {
     const committed = current.plus(workingBuy).minus(workingSell)
     const weight = weights.get(id) ?? new Decimal(0)
     // Whole units, rounded down: never buy past the target.
-    const targetQty = equity.mul(weight).div(ask.mul(multiplier)).floor()
+    const targetQty = equity.mul(weight).div(ask.mul(multiplier).mul(rate)).floor()
     const delta = targetQty.minus(committed)
 
     const base = {
@@ -180,18 +189,36 @@ export function planRebalance(input: {
     if (delta.isZero()) continue
     if (delta.gt(0)) {
       const notional = delta.mul(ask).mul(multiplier)
-      if (notional.lt(minTrade)) { skipped.push({ aliceId: id, reason: `buy ${delta.toFixed()} below minTradeValue` }); continue }
-      buys.push({ ...base, action: 'BUY', quantity: delta.toFixed(), estimatedPrice: ask.toFixed(), estimatedNotional: notional.toFixed(2) })
-      cash = cash.minus(notional)
+      const notionalBase = notional.mul(rate)
+      if (notionalBase.lt(minTrade)) { skipped.push({ aliceId: id, reason: `buy ${delta.toFixed()} below minTradeValue` }); continue }
+      buys.push({ ...base, action: 'BUY', quantity: delta.toFixed(), estimatedPrice: ask.toFixed(), estimatedNotional: notional.toFixed(2), currency: ccy, estimatedNotionalBase: notionalBase.toFixed(2) })
+      cash = cash.minus(notionalBase)
+      addFlow(ccy, notional.neg())
     } else {
       // Never sell more than is held and not already being sold: no shorts.
       const sellable = Decimal.max(current.minus(workingSell), 0)
       const qty = Decimal.min(delta.abs(), sellable)
       if (qty.isZero()) { skipped.push({ aliceId: id, reason: 'reduction already covered by working sells' }); continue }
       const notional = qty.mul(bid).mul(multiplier)
-      if (notional.lt(minTrade)) { skipped.push({ aliceId: id, reason: `sell ${qty.toFixed()} below minTradeValue` }); continue }
-      sells.push({ ...base, action: 'SELL', quantity: qty.toFixed(), estimatedPrice: bid.toFixed(), estimatedNotional: notional.toFixed(2) })
-      cash = cash.plus(notional)
+      const notionalBase = notional.mul(rate)
+      if (notionalBase.lt(minTrade)) { skipped.push({ aliceId: id, reason: `sell ${qty.toFixed()} below minTradeValue` }); continue }
+      sells.push({ ...base, action: 'SELL', quantity: qty.toFixed(), estimatedPrice: bid.toFixed(), estimatedNotional: notional.toFixed(2), currency: ccy, estimatedNotionalBase: notionalBase.toFixed(2) })
+      cash = cash.plus(notionalBase)
+      addFlow(ccy, notional)
+    }
+  }
+
+  // Cash each foreign currency still lacks after its own sells. Unknown
+  // (absent) when the broker reports no per-currency balances.
+  let fundingNeeds: RebalancePlan['fundingNeeds']
+  const foreign = [...flows.keys()].filter((c) => c !== baseCurrency).sort()
+  if (account.cashBalances) {
+    fundingNeeds = []
+    for (const ccy of foreign) {
+      const after = dec(account.cashBalances[ccy] ?? '0', `${ccy} cash balance`).plus(flows.get(ccy)!)
+      if (after.gte(0)) continue
+      const rate = rateToBase(account, ccy)!
+      fundingNeeds.push({ currency: ccy, amount: after.neg().toFixed(2), baseEquivalent: after.neg().mul(rate).toFixed(2) })
     }
   }
 
@@ -202,5 +229,6 @@ export function planRebalance(input: {
     orders: [...sells, ...buys],
     skipped,
     projectedCash: cash.toFixed(2),
+    ...(fundingNeeds ? { fundingNeeds } : {}),
   }
 }

@@ -117,7 +117,7 @@ describe('planRebalance', () => {
     expect(() => planRebalance({ ...base, quotes: q, target: target({ 'acc|TESTA': '-0.1' }, '1.1') })).toThrow(/within \[0, 1\]/)
     expect(() => planRebalance({ ...base, quotes: q, target: target({ 'acc|TESTA': '1' }, '0', { validUntil: '2026-10-09T14:30:00Z' }) })).toThrow(/expired/)
     expect(() => planRebalance({ ...base, quotes: new Map(), target: target({ 'acc|TESTA': '1' }, '0') })).toThrow(/no quote for acc\|TESTA/)
-    expect(() => planRebalance({ ...base, quotes: quotes(quote('acc|TESTA', '99', '100', 'EUR')), target: target({ 'acc|TESTA': '1' }, '0') })).toThrow(/FX conversion not supported/)
+    expect(() => planRebalance({ ...base, quotes: quotes(quote('acc|TESTA', '99', '100', 'EUR')), target: target({ 'acc|TESTA': '1' }, '0') })).toThrow(/trades in EUR and the broker reports no rate to USD/)
     const short = makePosition({ contract: makeContract({ aliceId: 'acc|TESTA' }), side: 'short', quantity: new Decimal(5) })
     expect(() => planRebalance({ ...base, positions: [short], quotes: q, target: target({ 'acc|TESTA': '1' }, '0') })).toThrow(RebalanceError)
   })
@@ -160,6 +160,57 @@ describe('planRebalance — strategy sleeve', () => {
       target: target({ 'acc|TESTA': '1' }, '0'), account: account('10000'), positions: [], openOrders: [],
       quotes: quotes(quote('acc|TESTA', '99', '100')), now: NOW, policy: { capital: '20000' },
     })).toThrow(/exceeds net liquidation/)
+  })
+})
+
+describe('planRebalance — multi-currency account', () => {
+  // EUR-based account buying USD ETFs (IBKR paper DU4354561 shape): 1 USD = 0.8925 EUR.
+  const eurAccount = (overrides: Partial<AccountInfo> = {}): AccountInfo => ({
+    baseCurrency: 'EUR', netLiquidation: '1000000', totalCashValue: '1000000', unrealizedPnL: '0',
+    fxRates: { EUR: '1', USD: '0.8925' }, cashBalances: { EUR: '1000000', USD: '0' }, ...overrides,
+  })
+  const usdHeld = (aliceId: string, qty: string, price: string): Position => makePosition({
+    contract: makeContract({ aliceId, symbol: aliceId.split('|')[1], currency: 'USD' }),
+    quantity: new Decimal(qty), marketPrice: price, marketValue: new Decimal(qty).mul(price).toFixed(),
+  })
+  const etfs = target({ 'acc|SPY': '0.49', 'acc|IEF': '0.49' }, '0.02')
+  const etfQuotes = () => quotes(quote('acc|SPY', '699.9', '700'), quote('acc|IEF', '94.99', '95'))
+
+  it('sizes USD instruments on EUR equity at the broker rate and reports the USD to convert', () => {
+    const plan = planRebalance({ target: etfs, account: eurAccount(), positions: [], openOrders: [], quotes: etfQuotes(), now: NOW })
+    // 490 000 EUR / (700 USD × 0.8925) = 784.3 → 784; / (95 × 0.8925) → 5779
+    expect(plan.orders.map((o) => [o.aliceId, o.quantity, o.currency, o.estimatedNotional, o.estimatedNotionalBase])).toEqual([
+      ['acc|IEF', '5779', 'USD', '549005.00', '489986.96'],
+      ['acc|SPY', '784', 'USD', '548800.00', '489804.00'],
+    ])
+    expect(plan.projectedCash).toBe('20209.04')
+    expect(plan.fundingNeeds).toEqual([{ currency: 'USD', amount: '1097805.00', baseEquivalent: '979790.96' }])
+  })
+
+  it('nets USD sells and USD cash against the USD the buys need', () => {
+    const plan = planRebalance({
+      target: etfs, account: eurAccount({ cashBalances: { EUR: '900000', USD: '50000' } }),
+      positions: [usdHeld('acc|AAPL', '100', '300')], openOrders: [],
+      quotes: new Map([...etfQuotes(), ['acc|AAPL', quote('acc|AAPL', '300', '300.1')]]), now: NOW,
+    })
+    expect(plan.orders[0]).toMatchObject({ aliceId: 'acc|AAPL', action: 'SELL', quantity: '100', estimatedNotionalBase: '26775.00' })
+    // 1 097 805 bought − 30 000 sold − 50 000 held
+    expect(plan.fundingNeeds).toEqual([{ currency: 'USD', amount: '1017805.00', baseEquivalent: '908390.96' }])
+  })
+
+  it('needs nothing converted when the currency is already funded, and cannot tell without balances', () => {
+    const funded = planRebalance({ target: etfs, account: eurAccount({ cashBalances: { EUR: '0', USD: '1200000' } }), positions: [], openOrders: [], quotes: etfQuotes(), now: NOW })
+    expect(funded.fundingNeeds).toEqual([])
+    const unknown = planRebalance({ target: etfs, account: eurAccount({ cashBalances: undefined }), positions: [], openOrders: [], quotes: etfQuotes(), now: NOW })
+    expect(unknown.fundingNeeds).toBeUndefined()
+  })
+
+  it('refuses a currency without a broker rate and ignores CASH balance positions', () => {
+    expect(() => planRebalance({ target: etfs, account: eurAccount({ fxRates: { EUR: '1' } }), positions: [], openOrders: [], quotes: etfQuotes(), now: NOW }))
+      .toThrow(/acc\|IEF trades in USD and the broker reports no rate to EUR/)
+    const cashRow = makePosition({ contract: makeContract({ aliceId: 'acc|12087792', symbol: 'EUR', secType: 'CASH', currency: 'USD' }), quantity: new Decimal(1000) })
+    const plan = planRebalance({ target: etfs, account: eurAccount(), positions: [cashRow], openOrders: [], quotes: etfQuotes(), now: NOW })
+    expect(plan.orders.map((o) => o.aliceId)).toEqual(['acc|IEF', 'acc|SPY'])
   })
 })
 
