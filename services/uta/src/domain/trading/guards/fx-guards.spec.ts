@@ -14,7 +14,7 @@ import { makeContract, makePosition } from '../brokers/mock/index.js'
 import '../contract-ext.js'
 
 // A EUR-based account holding USD instruments — the shape of the IBKR paper
-// account DU4354561 on 2026-10-12 (1 USD = 0.8925 EUR per TWS ExchangeRate).
+// paper account on 2026-10-12 (1 USD = 0.8925 EUR per TWS ExchangeRate).
 const USD_TO_EUR = '0.8925'
 
 const SPY = () => makeContract({ aliceId: 'acc|756733', symbol: 'SPY', currency: 'USD' })

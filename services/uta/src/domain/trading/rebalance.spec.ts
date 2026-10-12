@@ -164,7 +164,7 @@ describe('planRebalance — strategy sleeve', () => {
 })
 
 describe('planRebalance — multi-currency account', () => {
-  // EUR-based account buying USD ETFs (IBKR paper DU4354561 shape): 1 USD = 0.8925 EUR.
+  // EUR-based account buying USD ETFs (IBKR paper account shape): 1 USD = 0.8925 EUR.
   const eurAccount = (overrides: Partial<AccountInfo> = {}): AccountInfo => ({
     baseCurrency: 'EUR', netLiquidation: '1000000', totalCashValue: '1000000', unrealizedPnL: '0',
     fxRates: { EUR: '1', USD: '0.8925' }, cashBalances: { EUR: '1000000', USD: '0' }, ...overrides,
