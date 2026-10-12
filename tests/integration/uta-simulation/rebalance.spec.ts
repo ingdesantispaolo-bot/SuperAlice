@@ -68,4 +68,39 @@ describe('UTA — target portfolio rebalance', () => {
     await expect(uta.stageRebalance(equalWeight(-1000))).rejects.toThrow(/expired/)
     expect(uta.status().staged).toHaveLength(0)
   })
+
+  it('reads the target quotes in parallel, bounded, and refuses when one fails', async () => {
+    const broker = new MockBroker({ cash: 100_000 })
+    const weights = Array.from({ length: 30 }, (_, i) => `ETF${i}`)
+    for (const s of weights) broker.setQuote(s, 100)
+    const uta = new UnifiedTradingAccount(broker)
+    await uta.waitForConnect()
+
+    // Slow snapshots, as IBKR's are in a thin pre-market session.
+    let inFlight = 0
+    let peak = 0
+    const getQuote = broker.getQuote.bind(broker)
+    broker.getQuote = async (contract) => {
+      inFlight++
+      peak = Math.max(peak, inFlight)
+      try {
+        await new Promise((r) => setTimeout(r, 20))
+        return await getQuote(contract)
+      } finally {
+        inFlight--
+      }
+    }
+    const target: TargetPortfolio = {
+      ...equalWeight(),
+      weights: weights.map((s) => ({ aliceId: `mock-paper|${s}`, weight: '0.03' })),
+      cashWeight: '0.1',
+    }
+    const plan = await uta.planRebalance(target)
+    expect(plan.orders).toHaveLength(30)
+    expect(peak).toBeGreaterThan(1)
+    expect(peak).toBeLessThanOrEqual(10)
+
+    broker.getQuote = async () => { throw new Error('no market data') }
+    await expect(uta.planRebalance(target)).rejects.toThrow(/no market data/)
+  })
 })

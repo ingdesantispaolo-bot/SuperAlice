@@ -44,6 +44,12 @@ import './contract-ext.js'
 /** Structured broker refusals that prove the write was not placed. */
 const DEFINITIVE_REFUSAL_CODES: ReadonlySet<string> = new Set(['CONFIG', 'AUTH', 'EXCHANGE', 'MARKET_CLOSED', 'CONNECTING'])
 
+/** Concurrent quote snapshots while planning a rebalance. An IBKR snapshot
+ *  can take ~11 s in a thin session; 10 keeps a 20-ETF plan to two rounds.
+ *  At 20 TWS queued some requests past the 12.5 s snapshot timeout (paper,
+ *  pre-market, 2026-10-12). */
+const REBALANCE_QUOTE_CONCURRENCY = 10
+
 function isDefinitiveBrokerRefusal(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false
   const { name, code } = err as { name?: unknown; code?: unknown }
@@ -844,11 +850,23 @@ export class UnifiedTradingAccount {
     if ((policy?.scope ?? 'account') === 'account') {
       for (const p of positions) if (!p.quantity.isZero() && p.contract.aliceId) ids.add(p.contract.aliceId)
     }
+    // Bounded parallel snapshots: one at a time, 20 thin pre-market quotes
+    // took minutes on IBKR and outlived the 30 s Alice → UTA proxy.
     const quotes = new Map<string, Quote>()
-    for (const id of ids) {
-      const contract = this.contractFromAliceId(id)
-      quotes.set(id, await this._callBroker(() => this.broker.getQuote(contract)))
+    const queue = [...ids]
+    let failed = false
+    const worker = async (): Promise<void> => {
+      for (let id = queue.shift(); id !== undefined && !failed; id = queue.shift()) {
+        const contract = this.contractFromAliceId(id)
+        try {
+          quotes.set(id, await this._callBroker(() => this.broker.getQuote(contract)))
+        } catch (err) {
+          failed = true
+          throw err
+        }
+      }
     }
+    await Promise.all(Array.from({ length: Math.min(REBALANCE_QUOTE_CONCURRENCY, queue.length) }, worker))
     return planRebalance({ target, account, positions, openOrders, quotes, now: new Date(), policy })
   }
 
