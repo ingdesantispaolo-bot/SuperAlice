@@ -70,6 +70,10 @@ guide, also without vendoring third-party code.
 
 ## Incident Records
 
+- [[docs/incidents/2026-10-12-superalice-security-review.md]] —
+  [SuperAlice security review](incidents/2026-10-12-superalice-security-review.md):
+  dependency and loopback guard corrections, verified local checks, and the
+  remaining credential and AI/operator authority boundaries in the fork.
 - [[docs/incidents/2026-07-17-ibkr-contract-resolution.md]] —
   [IBKR conId contract-resolution repair](incidents/2026-07-17-ibkr-contract-resolution.md):
   recorded paper diagnosis, canonical routing invariants, and safe cleanup
