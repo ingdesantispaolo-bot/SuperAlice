@@ -227,9 +227,9 @@ function AiTradingToggle({
           {t('settings.agent.allowAiTradingWarning')}
         </div>
       )}
-      {enabled && config.agent?.aiTradingAccounts && (
+      {enabled && (
         <div className="mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground leading-relaxed">
-          {config.agent.aiTradingAccounts.length > 0
+          {config.agent?.aiTradingAccounts?.length
             ? t('settings.agent.allowAiTradingScope', { accounts: config.agent.aiTradingAccounts.join(', ') })
             : t('settings.agent.allowAiTradingScopeNone')}
         </div>

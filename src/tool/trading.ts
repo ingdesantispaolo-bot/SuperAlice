@@ -202,7 +202,7 @@ async function stageAndMaybeCommit(
 /**
  * @param manager        UTA SDK manager (account resolution + FX).
  * @param allowAiTrading  Live, per-account getter for AI-initiated pushes
- *   (`agent.allowAiTrading`, optionally scoped by `agent.aiTradingAccounts`).
+ *   (`agent.allowAiTrading` and only the accounts listed in `agent.aiTradingAccounts`).
  *   Read at call time (not captured) so toggling it in Settings takes effect
  *   without a restart. Gates `tradingPush`: false ⇒ stage + ask the user to
  *   approve in the Web UI; true ⇒ the AI pushes to that broker directly.

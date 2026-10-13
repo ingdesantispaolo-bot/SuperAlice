@@ -32,6 +32,7 @@ import {
   type TradingModePolicy,
 } from './services/trading-mode.js'
 import { createTradingTools } from './tool/trading.js'
+import { aiTradingAllowed } from './core/ai-trading-scope.js'
 import { SymbolIndex } from './domain/market-data/equity/index.js'
 import { CommodityCatalog } from './domain/market-data/commodity/index.js'
 import { createEquityTools } from './tool/equity.js'
@@ -249,11 +250,9 @@ async function main() {
   // One unified set of trading tools — routes via `source` parameter at runtime.
   // The getter reads `config.agent.allowAiTrading` live (config is mutated in
   // place on Settings writes), so toggling AI trading takes effect without a
-  // restart. `aiTradingAccounts`, when set, scopes it to those UTA ids.
+  // restart. Only accounts listed in `aiTradingAccounts` are ever allowed.
   toolCenter.register(
-    createTradingTools(utaManager, (accountId) =>
-      config.agent.allowAiTrading
-      && (config.agent.aiTradingAccounts === undefined || config.agent.aiTradingAccounts.includes(accountId))),
+    createTradingTools(utaManager, (accountId) => aiTradingAllowed(config.agent, accountId)),
     'trading',
   )
 
