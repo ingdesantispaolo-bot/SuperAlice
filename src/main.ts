@@ -45,6 +45,9 @@ import { createMarketSearchTools } from './tool/market.js'
 import { createVendorTools } from './tool/market-vendors.js'
 import { createQuantTools } from './tool/quant.js'
 import { createSnapshotTools } from './tool/snapshot.js'
+import { createMonitorContextTools } from './tool/monitor-context.js'
+import { createMonitorServiceTools, startConfiguredMonitorService } from './tool/monitor-service.js'
+import { startConfiguredMonitorMcp } from './tool/monitor-mcp.js'
 import { createSimulateTools } from './tool/simulate.js'
 import { createBarService } from './domain/market-data/bars/index.js'
 import { createReferenceData } from './domain/market-data/reference/service.js'
@@ -75,6 +78,7 @@ import { issueToolFactories } from './tool/issue-tools.js'
 import { sessionSignatureFactory } from './tool/session-signature.js'
 import { sessionRenameFactory } from './tool/session-rename.js'
 import { provenanceShowFactory } from './tool/provenance-show.js'
+import { marketMemoryFactories } from './tool/market-memory.js'
 import { conversationToolFactories } from './tool/conversation.js'
 import { artifactConversationToolFactories } from './tool/conversation-artifacts.js'
 import { createToolCallLog } from './core/tool-call-log.js'
@@ -120,6 +124,7 @@ async function main() {
   workspaceToolCenter.register(sessionSignatureFactory)
   workspaceToolCenter.register(sessionRenameFactory)
   workspaceToolCenter.register(provenanceShowFactory)
+  for (const f of marketMemoryFactories) workspaceToolCenter.register(f)
   for (const f of conversationToolFactories) workspaceToolCenter.register(f)
   for (const f of artifactConversationToolFactories) workspaceToolCenter.register(f)
 
@@ -272,6 +277,11 @@ async function main() {
   toolCenter.register(createMarketBarsTools({ barService }), 'market-bars')
   toolCenter.register(createQuantTools({ barService }), 'quant')
   toolCenter.register(createSnapshotTools(barService), 'snapshot')
+  toolCenter.register(createMonitorContextTools(), 'monitor-context')
+  const monitorService = await startConfiguredMonitorService()
+  toolCenter.register(createMonitorServiceTools(monitorService), 'monitor-service')
+  const monitorMcp = await startConfiguredMonitorMcp()
+  if (monitorMcp) toolCenter.register(monitorMcp.tools, 'monitor-mcp')
   toolCenter.register(createSimulateTools(barService), 'simulate')
   toolCenter.register(createSectorRotationTools(equityClient, config.marketData.hub), 'sector-rotation')
   if (derivativesClient) {
@@ -450,6 +460,8 @@ async function main() {
   let stopped = false
   const shutdown = async () => {
     stopped = true
+    await monitorMcp?.client.dispose()
+    await monitorService?.dispose()
     await removeCliEndpoint()
     newsCollector?.stop()
     for (const plugin of [...corePlugins, ...optionalPlugins.values()]) {
