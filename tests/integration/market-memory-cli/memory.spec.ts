@@ -55,7 +55,7 @@ describe('scoped market memory through real CLI and filesystem', () => {
     if (!server.listening) await new Promise<void>(done => server.once('listening', done))
     const port = (server.address() as { port: number }).port
     const run = (args: string[], ws = 'ws1') => promisify(execFile)(process.execPath, [resolve('src/workspaces/cli/bin/openalice-cli.cjs'), ...args], {
-      env: { ...process.env, OPENALICE_CLI_BIN: 'alice', AQ_WS_ID: ws, OPENALICE_PROJECT_ID: '', OPENALICE_TOOL_SOCKET: '', OPENALICE_TOOL_URL: `http://127.0.0.1:${port}/cli` }, timeout: 10_000,
+      env: { ...process.env, OPENALICE_CLI_BIN: 'alice', AQ_WS_ID: ws, AQ_SESSION_ID: '', AQ_RUN_ID: '', OPENALICE_PROJECT_ID: '', OPENALICE_TOOL_SOCKET: '', OPENALICE_TOOL_URL: `http://127.0.0.1:${port}/cli` }, timeout: 10_000,
     })
     try {
       expect((await run(['memory', 'context', '--help'])).stdout).toContain('knownAsOf')
@@ -72,6 +72,12 @@ describe('scoped market memory through real CLI and filesystem', () => {
       expect(JSON.parse((await run(['memory', 'catalog'])).stdout).entries).toHaveLength(2)
       const context = JSON.parse((await run(['memory', 'context', '--entity-ids', '["italy.fitted.10y"]'])).stdout)
       expect(context.schema).toBe('superai.market-context/2')
+      expect(JSON.parse((await run(['memory', 'index', '--operation', 'audit'])).stdout)).toMatchObject({ sequence: 2, verificationScope: 'all-event-bytes' })
+      expect(JSON.parse((await run(['memory', 'index', '--operation', 'rebuild'])).stdout)).toMatchObject({ sequence: 2, newlyVerified: 2 })
+      const denied = await app.request('/cli/ws1/memory/index', { method: 'POST', headers: { 'content-type': 'application/json', 'x-openalice-run': 'unknown-run' }, body: JSON.stringify({ operation: 'recover-lock' }) })
+      expect(denied.status).toBe(403)
+      const currentManifest = await (await app.request('/cli/ws1/data/manifest')).json()
+      expect(JSON.stringify(currentManifest.groups.memory)).not.toContain('recover-lock')
       expect(context.catalog.find((entry: { entityId: string }) => entry.entityId === 'italy.fitted.10y')).toMatchObject({ role: 'estimated-curve', benchmarkEquivalence: 'not-established' })
       expect(context.reevaluation).toMatchObject({ monitorContacted: false, performed: false, requiresNewEvidence: true })
       expect(JSON.parse((await run(['memory', 'catalog'], 'ws2')).stdout).entries).toEqual([])

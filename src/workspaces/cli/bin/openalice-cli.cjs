@@ -102,6 +102,29 @@ async function main() {
     return writeResponse(res, outputPath)
   }
 
+  if (BIN === 'alice' && group === 'memory' && verb === 'index') {
+    if (process.env.AQ_RUN_ID || process.env.AQ_SESSION_ID) fail('Memory maintenance requires the user terminal')
+    const schema = { type: 'object', properties: {
+      workspaceId: { type: 'string', description: 'Registered desk in the selected Project.' },
+      operation: { type: 'string', enum: ['audit', 'rebuild', 'recover-lock'], description: 'Verify all event bytes, rebuild the derived index, or recover a dead owner.' },
+      lock: { type: 'string', enum: ['writer', 'index', 'control'], description: 'Lock to recover; default writer. Never recovered by age.' },
+    }, required: ['operation'] }
+    if (wantsHelp) return printVerbHelp(group, verb, { schema, description: 'User-only local memory index maintenance. No source collection, model or broker.' })
+    const { workspaceId: selected, ...args } = await parseFlags(argv.slice(argv.indexOf(verb) + 1), schema, { group, verb })
+    const target = selected || wsId
+    if (!target || typeof target !== 'string') fail('Memory maintenance requires --workspace-id <desk-id> in the selected Project')
+    if (outputPath) {
+      const fs = await import('node:fs/promises')
+      try { await fs.lstat(outputPath); fail(`Output already exists: ${outputPath}`) }
+      catch (error) { if (error.code !== 'ENOENT') throw error }
+    }
+    const r = await fetchJson(gateway + '/' + encodeURIComponent(target) + '/memory/index', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args),
+    })
+    if (!r.ok) fail(r.body && r.body.error ? String(r.body.error) : `HTTP ${r.status}`)
+    return writeResponse((r.body.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n'), outputPath)
+  }
+
   const m = await manifest(base)
   const groupCmds = m.groups[group]
   if (!groupCmds) {
