@@ -84,11 +84,19 @@ Shared-file changes and contract clarifications are announced there first.
   projection/reference closure resolved them. Cap is now 100,000 events/512 MB.
   Five index assertions pass, including corruption and reconstruction equality;
   context/CLI regressions and app/test typechecks accompany the commit.
-- [ ] X5 real-control acceptance: source publication/idempotency is implemented
-  and verified (41 domain/tool assertions, three real CLI/HTTP/Git tests including
-  two identical helper publications). Stable episode identities preserve original
-  confirmation/expiry/source references. Candidates are refused. Real native
-  scheduled-control recording and legacy confirmation reconciliation remain.
+- [x] X5 real-control acceptance: stable signal publication/idempotency verified
+  by 41 domain/tool assertions and three CLI/HTTP/Git tests. Native control
+  run-vjKtsfrs recorded nine historical episodes and accepted state with original
+  confirmation/expiry, but hit its 15m watchdog during Git close. Hashes and
+  receipts were verified; only its 199 run/memory files were committed as
+  e1e53f5, preserving three other staged files. Recurring What now reuses existing
+  receipts instead of repeating first adoption. Retry run--_OkOrjj completed
+  exit 0/healthy with confirmed Inbox delivery. Real two-control proof: 78 events,
+  44 verified evidence copies, 11 unique signals; original nine hashes/dates
+  unchanged, two genuinely new episodes, zero duplicate signal IDs. Report/state
+  hashes and finding receipts verified. Old source-vintage completeness remains
+  unattested; attributed news flashes remain labeled. Receipts x5-real-two-control-
+  receipt.json, x5-real-control-status.json and x5-real-context-expiry.json.
 - [x] X6 managed rollout: bundle 1.0.10+712473537e88a30d adopted in all
   three desks and Chat 1.8.14 through its template transaction, zero conflicts.
   Context before interpretation, candidate chat theses and explicit user
