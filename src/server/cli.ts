@@ -2,6 +2,7 @@ import { registerConnectorModelRoutes } from './connector-model.js'
 import { registerMarketReferenceRoute } from './market-reference.js'
 import { registerWorkspaceFileRoutes } from './workspace-files.js'
 import { registerProjectCliRoutes } from './project-cli.js'
+import { registerMarketMemoryApprovalRoutes } from './market-memory-approval.js'
 /**
  * CLI gateway — the third adapter over the tool registry.
  *
@@ -73,6 +74,7 @@ export function registerCliRoutes(app: Hono, deps: CliGatewayDeps, manifestOnly 
     registerProjectCliRoutes(app, toolCenter)
     registerMarketReferenceRoute(app, toolCenter)
     registerWorkspaceFileRoutes(app, id => getWorkspaceService()?.registry.get(id))
+    registerMarketMemoryApprovalRoutes(app, id => getWorkspaceService()?.registry.get(id))
   }
 
   /** Resolve + validate the workspace from the URL path. */
