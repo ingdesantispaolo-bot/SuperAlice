@@ -47,6 +47,25 @@ files, Issues, Inbox reports, tracked entities, and attributable Sessions.
 
 ## Choose the right surface
 
+Follow intraday, multi-session and long-term horizons for markets and portfolios.
+Compare prior observations for regimes, correlations, anomalies and technical extremes.
+`alice-analysis` owns market-assistant profiles, evidence and alerts; Issues own scheduling.
+
+For financial research, discover the relevant available sources before forming
+a conclusion. Consult existing desk evidence when it can answer the question;
+use live broker reads for account state and execution quotes, the monitor for
+its derived context, IBKR research/news archives and subscribed RSS for news.
+Add authoritative web sources when local coverage is missing
+or insufficient. These sources serve different questions; do not query every
+source for unrelated requests or silently substitute one for another.
+
+When IbIvMonitor is running, its MCP owns IBKR research-history acquisition:
+use instrument tracking and history requests instead of a separate research
+TWS client. The `alice-analysis` Skill owns that procedure. Archived analyses
+and previous conversations are historical context, not refreshed market facts.
+State the sources actually read, observation dates and material gaps. A failed
+lookup is missing evidence, not proof that an event or instrument does not exist.
+
 OpenAlice provides the CLIs below. Use their help for current parameters and
 the relevant skills for domain-specific guidance. Choose sources and tools to
 fit the task.
@@ -55,14 +74,14 @@ fit the task.
 |---|---|---|
 | Current market boards, fundamentals, macro, calendars | `traderhub` | `traderhub` |
 | Symbol discovery, collected RSS, K-lines and bounded analysis | `alice` | `alice`, `alice-analysis` |
+| IbIvMonitor macro/GEX, cached history, data acquisition and deterministic analytics | `alice monitor` + `alice analysis` | `alice-analysis` |
 | Peer addressing, Agent conversation, Inbox, Issues and provenance | `alice` | `alice` |
 | Issue files, schedules, headless delivery contracts | `.alice/issues/` + `alice issue` | `self-scheduling` |
 | Accounts, positions, orders, trading-as-git | `alice-uta` | `alice-uta` |
 | Optional website adapters, if installed separately | `opencli` | `opencli-reader` |
 
-Use the bundled research skills (`build-thesis`, `sector-rotation`,
-`scan-value-chain`, `retrospective`) when their workflow matches the request.
-They are methods, not mandatory ceremony.
+Use `build-thesis`, `sector-rotation`, `scan-value-chain` or `retrospective`
+when their methods match the request.
 
 ## Collaboration model
 

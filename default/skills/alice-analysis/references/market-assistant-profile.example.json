@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "revision": "market-assistant-v1",
+  "language": "it",
+  "timezone": "Europe/Rome",
+  "universe": {
+    "includeVerifiedHoldings": true,
+    "symbols": [],
+    "discoverMonitorRepresentatives": true,
+    "assetClasses": ["equities", "rates", "currencies", "volatility", "commodities"],
+    "maxCorrelationInstruments": 12,
+    "accountSelection": null
+  },
+  "horizons": {
+    "intraday": {"barMinutes": 5, "comparison": ["previous-update", "session-open", "previous-close"]},
+    "swing": {"sessions": [5, 20, 60], "completedBarsOnly": true},
+    "longTerm": {"sessions": [60, 120, 252], "benchmark": null, "targetAllocation": null, "riskBudget": null}
+  },
+  "screening": {
+    "rsi": {"lookback": 14, "low": 30, "high": 70},
+    "extension": {"lookback": 20, "absoluteZ": 2},
+    "atrLookback": 14,
+    "correlationWindows": ["short", "intermediate", "long"],
+    "correlationMethod": "discover-from-monitor-catalog"
+  },
+  "notifications": {
+    "destination": "alice-inbox",
+    "confirmationFreshObservations": 2,
+    "unchangedFindingCooldownMinutes": 120,
+    "criticalEvidenceMayBypassConfirmation": true,
+    "includeResolutions": true,
+    "includeCoverageOutageAndRecovery": true
+  },
+  "automation": {"scheduleOwner": "workspace-issues", "cadence": null},
+  "authority": {"researchAndNotifications": true, "brokerWrites": false}
+}

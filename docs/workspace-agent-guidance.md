@@ -1,5 +1,10 @@
 # Workspace Agent Guidance
 
+Market continuity also routes to the alice-analysis market-memory reference:
+scoped catalog, immutable evidence and temporal theses, with offline context.
+Knowledge recorded by this memory is distinct from source-vintage availability.
+The procedure owns entry shapes; [[docs/market-memory.md]] owns implementation.
+
 This guide owns the instruction architecture injected into OpenAlice
 Workspaces. It covers the boundary between the always-loaded Workspace
 contract, discoverable skills, and the live CLI surface.
@@ -23,6 +28,23 @@ This layer may define only durable behavior:
 - evidence and freshness requirements;
 - when to ask an attributable Session instead of guessing;
 - which skill owns a domain.
+
+The Chat contract now directs financial questions to relevant existing desk
+evidence, live account/quote reads, monitor context/history/news and subscribed RSS,
+with web supplementation for missing coverage. It requires sources actually
+read, original observation times and gaps. This is an agent instruction, not
+automatic context insertion or a deterministic source router. The alice-analysis
+Skill owns monitor MCP discovery, canonical evidence and one-owner IBKR research
+acquisition and IBKR news with durable cursors; alice owns RSS and prior-work lookup.
+
+For market/portfolio work, Chat also routes to the alice-analysis continuing
+market-assistant procedure: intraday, multi-session positions and long-term
+portfolio evaluation. The Skill owns the customizable local profile, dated
+state/evidence comparisons, regime/correlation/extreme checks and notification
+deduplication. These are instructions for the native Agent, not an automatically
+executing observer. Scheduled Issues own unattended execution and Inbox delivery;
+their cadence and actual run status must be reported separately from installed
+guidance. Private portfolio state remains in the owning Workspace.
 
 It must not duplicate flag manuals, Issue schemas, long examples, or provider
 inventories. Those details change too often and crowd out the actual request.
