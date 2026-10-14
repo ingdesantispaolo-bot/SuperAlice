@@ -1,6 +1,30 @@
 # IbIvMonitor context bridge
 
-## MCP research dialogue (2026-10-13)
+## Producer references (reviewed 2026-10-14)
+
+The producer owns both documents under `IbIvMonitor.App/docs/` in its checkout:
+
+- `MCP_GUIDA_ESTERNI.md`: client connection, instrument identities, data semantics,
+  the complete tool catalog, limits/errors and the archive roadmap. The current
+  guide declares `toolsVersion: 1` and 24 tools.
+- `MCP_SUPERAI.md`: SuperAI's integration contract, canonical evidence, bridge
+  coexistence and GEX acquisition/price-space rules.
+
+Use these together with live `tools/list` schemas and `alice monitor --help`.
+The guide's direct stdio/pipe examples are for external clients; Workspace
+agents use the Project-managed `alice monitor` relay. Executable and data paths
+remain operator configuration. Producer changes are coordinated in
+`IbIvMonitor.App/docs/COORDINAMENTO_CLAUDE_CODEX.md`.
+
+The 14 October archive increment writes `market_data.db` alongside existing
+stores; current MCP readers still use the existing archives. Proposed `bars`,
+`coverage`, `rolls`, `instruments`, `export`, `acquire`/`acquire_status` and
+`--data-mcp` are roadmap capabilities, not part of the reviewed 24-tool contract.
+Current offline MCP returns status only; local retained memory/file evidence
+remains separately readable. Producer revisions do not yet give `history_daily`
+an as-known-at query or expose the requested external-series archive.
+
+## MCP research dialogue
 
 The optional client starts the operator-configured monitor executable with
 `--mcp --wait-seconds 2` over the official SDK stdio transport. It inherits the
@@ -32,6 +56,19 @@ it. That legacy script now refuses to open the broker when the configured MCP
 reports a running monitor, and refuses on indeterminate configured MCP status.
 History requests build daily only; source-native daily/CONTFUT conventions do
 not promise the old script's ADJUSTED_LAST or a current execution quote.
+The updated guide documents ratio-adjusted CONTFUT history, rebased at each
+roll to the current delivery contract. Refresh working copies after a roll
+before comparing price levels; preserve the original immutable evidence and
+record the new source version separately. Historical adjusted levels are not
+the prices paid on those dates. Intraday uses the actual delivery contract.
+
+Producer limits are eight concurrent calls per MCP session, 1 MiB incoming
+messages and 8 MiB results. Remote timeouts are normally 60 seconds, 120 for
+`data_status`/`correlation_matrix`; Alice's call budgets are 65/125 seconds.
+Use bounded ranges: daily at most 10,000 bars; intraday at most 20,000 bars,
+31 days at one minute or 120 days at five minutes per call. Tool failures retain
+`isError:true` and their hashed error payload; protocol loss `-32003` has no
+remote evidence and does not replay acquisition. Read live help for exact flags.
 
 The five news commands are `news-search`, `news-latest`, `news-article`,
 `news-stats` and `analyst-actions`. They read the monitor's permanent IBKR archive;
@@ -46,10 +83,8 @@ news entitlements; current observed status overrides older diagnostic notes.
 
 The file monitorContext remains available for immutable hash/as-of evidence;
 MCP current context re-evaluates observation quality and links the bridge
-snapshot. UTA still owns account reads and orders. No contract changes were
-requested in the monitor repository. The producer contract is
-`IbIvMonitor.App/docs/MCP_SUPERAI.md`; changes must be coordinated in its
-`docs/COORDINAMENTO_CLAUDE_CODEX.md`.
+snapshot. UTA still owns account reads and orders. The producer references above
+own the external MCP contract; SuperAI's memory schema remains independent.
 
 Native acceptance: `scripts/verify-ibiv-mcp.mts`, registered system integration,
 uses actual SDK, WPF executable, controller and Project CLI under one OS user,

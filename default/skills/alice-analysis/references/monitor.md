@@ -1,5 +1,11 @@
 # IbIvMonitor research procedure
 
+Producer references, reviewed 2026-10-14 (`toolsVersion: 1`, 24 tools):
+`IbIvMonitor.App/docs/MCP_GUIDA_ESTERNI.md` owns external-client setup, tool/data
+semantics, limits and errors; `IbIvMonitor.App/docs/MCP_SUPERAI.md` owns the
+SuperAI integration contract, evidence and GEX rules. Resolve them in the
+operator's monitor checkout. Use live CLI help for the actual schema.
+
 Workspace shells expose `alice monitor`; use its live help for flags. The MCP
 relay runs under the same Windows user and data configuration as the monitor.
 It reconnects when the monitor starts. It never reads accounts or places orders.
@@ -14,8 +20,9 @@ It reconnects when the monitor starts. It never reads accounts or places orders.
    are historical. SPX multi-chain levels use ES prices, NDX levels NQ prices.
 4. For a research universe, use `alice monitor instruments-list` and copy exact
    monitor IDs. If needed use `instrument-track` with broker contract fields;
-   use `--asset-kind etf` for ETFs. Futures need an explicit expiry. These IDs
-   differ from UTA aliceIds and from vendor barIds.
+   use `--asset-kind etf` for ETFs. Resolving a delivery future needs its expiry;
+   monitor IDs themselves omit expiry, while returned contracts/bars carry it.
+   These IDs differ from UTA aliceIds and from vendor barIds; never invent them.
 5. When the monitor is running, request missing daily history with
    `history-request`, retain its job ID, then inspect `history-request-status`.
    Reuse its cache, pacing and incremental acquisition. Do not run the separate
@@ -30,6 +37,33 @@ It reconnects when the monitor starts. It never reads accounts or places orders.
 7. Use `data-status`, `correlation-matrix`, `relation-pair`, `alerts-recent` and
    `market-state-history` when relevant. Get available variants/windows from the
    catalog and report those used. A correlation is not an executable hedge.
+
+CONTFUT is ratio-adjusted to the current delivery contract and rebased at each
+roll. The producer documents local archive rebasing from 2026-10-14. Refresh
+working copies after a roll before comparing levels or combining new bars with
+old ones; preserve immutable old evidence and attach new evidence separately.
+Adjusted historical levels are not the original transaction prices. Intraday
+bars belong to the actual delivery contract. Inspect fetchedAt/finality; a new
+download does not prove that the data was known on its historical session date.
+
+Bound reads with from/to/limit: daily <=10,000 bars; intraday <=20,000 bars,
+<=31 days at step 1 or <=120 days at step 5 per call. The producer allows eight
+concurrent calls per session, 1 MiB incoming messages and 8 MiB results. Remote
+timeouts are normally 60 s, 120 s for data-status/correlation-matrix. Preserve
+isError:true failures as failures; inspect their error code and next step.
+Protocol error -32003 means the monitor was lost during a call and carries no
+canonical payload proof. Check status before any considered acquisition retry.
+
+alerts-recent also reports the 0DTE expected-move decay alert (emdecay:S&P or
+emdecay:Nasdaq); retain the reported actual/theoretical move, anchor and ratio.
+Treat it as the monitor's deterministic observation with its original timing.
+
+market_data.db migration/double writes do not expose a new MCP archive API yet.
+bars, coverage, rolls, instruments, export, acquire/acquire_status and --data-mcp
+are planned capabilities. Use current history-daily/history-intraday and report
+unavailable coverage. history-daily has no as-known-at selector; a stored revision
+does not create one. With the monitor stopped only status answers over MCP;
+use preserved local memory/file evidence for offline research.
 
 For GEX detail, list `alice monitor gex-monitors`, then read `gex-profile
 --underlying SPX` (ES price space), NDX (NQ) or a monitored single chain (its

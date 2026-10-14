@@ -44,7 +44,7 @@ GitHub navigation.
 | [[docs/uta-live-testing.md]] | [UTA live testing](uta-live-testing.md) | Real broker/demo acceptance scenarios and trading invariants |
 | [[docs/ibkr-wire-protocol.md]] | [IBKR wire protocol](ibkr-wire-protocol.md) | TWS/Gateway inbound framing, payload-only decoder contract, failure isolation, and verification |
 | [[docs/market-data-architecture.md]] | [Market data architecture](market-data-architecture.md) | TraderHub/reference data, BarService K-lines, and the private provider compatibility layer |
-| [[docs/ibiv-monitor-context.md]] | [IbIvMonitor context and MCP](ibiv-monitor-context.md) | Immutable evidence, 20-tool MCP dialogue, IBKR news and monitor-owned research acquisition |
+| [[docs/ibiv-monitor-context.md]] | [IbIvMonitor context and MCP](ibiv-monitor-context.md) | Producer guide references, immutable evidence, 24-tool MCP dialogue, GEX, IBKR news and monitor-owned research acquisition |
 
 Other files under `docs/images/` are README/product assets rather than owner
 guides.

@@ -44,6 +44,10 @@ acquiring IBKR research history. `alice monitor` exposes its live MCP contract;
 `alice analysis monitor-context` retains immutable hash/as-of file evidence.
 Use these for monitor-derived macro/GEX and cached research series, rather than
 web approximations. Availability and freshness come from tool results.
+The procedure tracks the producer's `MCP_GUIDA_ESTERNI.md` (external-client
+guide) and `MCP_SUPERAI.md` (integration contract), reviewed 2026-10-14:
+`toolsVersion: 1`, 24 tools. It also covers CONTFUT roll rebasing and separates
+current archive commands from the producer's planned archive API.
 
 For IBKR headlines, articles and structured analyst actions read
 [the monitor news procedure](references/monitor-news.md). It owns durable
