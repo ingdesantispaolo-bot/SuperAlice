@@ -33,6 +33,11 @@ For preserved evidence, temporal thesis revisions and offline context, read
 [the market-memory procedure](references/market-memory.md). `alice memory`
 exposes the workspace-owned catalog, append-only entries and get_market_context.
 Historical imports do not backdate knowledge; monitor data ownership is unchanged.
+Read context before forming a market interpretation. Chat proposes candidate
+theses and attributes user opinions to the user; activation follows the explicit
+approval/review workflow. Every confirmed intraday/swing signal is recorded with
+original confirmation, expiry and evidence, even when notification is suppressed.
+Use the market-memory signal draft/helper protocol for identical retries.
 
 Read [the monitor procedure](references/monitor.md) before using monitor data or
 acquiring IBKR research history. `alice monitor` exposes its live MCP contract;
