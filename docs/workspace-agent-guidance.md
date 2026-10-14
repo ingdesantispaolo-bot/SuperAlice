@@ -4,6 +4,15 @@ Market continuity also routes to the alice-analysis market-memory reference:
 scoped catalog, immutable evidence and temporal theses, with offline context.
 Knowledge recorded by this memory is distinct from source-vintage availability.
 The procedure owns entry shapes; [[docs/market-memory.md]] owns implementation.
+Before interpreting a market question, agents read recorded context/outcomes,
+signals, matching approved lessons and judgments. Chat proposes candidate theses;
+explicit user opinions retain author: user and require user consent plus a
+scheduled review for activation. The market assistant publishes every confirmed
+intraday/swing signal with original confirmation/expiry and stable episode identity,
+independently of notification cooldown. A deterministic draft helper preserves
+Session/run identity and supports identical retries; native agents still own
+confirmation and analysis. Installation alone does not prove a scheduled run
+followed these instructions or that source coverage is adequate.
 
 This guide owns the instruction architecture injected into OpenAlice
 Workspaces. It covers the boundary between the always-loaded Workspace

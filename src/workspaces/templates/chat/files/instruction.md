@@ -50,6 +50,12 @@ files, Issues, Inbox reports, tracked entities, and attributable Sessions.
 Follow intraday, multi-session and long-term horizons for markets and portfolios.
 Compare prior observations for regimes, correlations, anomalies and technical extremes.
 `alice-analysis` owns market-assistant profiles, evidence and alerts; Issues own scheduling.
+Before a market interpretation, read the owning desk's market memory context and
+its recorded outcomes, signals, applicable lessons and judgments. Chat writes
+candidate theses. Attribute an explicitly stated user opinion to author: user
+and keep it candidate; conversation does not grant activation or approval.
+Follow the market-memory procedure for controlled scheduled-review activation
+and preserving every confirmed intraday/swing signal with evidence and expiry.
 
 For financial research, discover the relevant available sources before forming
 a conclusion. Consult existing desk evidence when it can answer the question;
