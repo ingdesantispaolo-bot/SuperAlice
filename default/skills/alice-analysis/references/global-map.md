@@ -93,6 +93,8 @@ value fragments, not the 2 MB page. Values older than 10 days are `stale`.
 Only current values exist so far: comparisons with each market's own
 valuation history need the monitor to persist these series over time.
 
+For the report itself (structure, judgments, theses, cadence) read `global-map-report.md`.
+
 Measures are descriptive. An RSI extreme, a ranking or a trend state is not a
 buy/sell signal, and this procedure authorizes research only, never orders.
 
