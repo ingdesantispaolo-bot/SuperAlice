@@ -9,6 +9,7 @@ GitHub navigation.
 
 | Wikilink route | Guide | Owns |
 |---|---|---|
+| [[docs/market-memory.md]] | [Market memory](market-memory.md) | Workspace catalog, immutable evidence and temporal thesis events; offline get_market_context and scope |
 | [[docs/alice-project.md]] | [AliceProject](alice-project.md) | Top-level local runtime identity, one-project/one-backend topology, concurrency, and display contract |
 | [[docs/project-structure.md]] | [Project structure](project-structure.md) | Process boundaries, source ownership, state roots, architectural entry points |
 | [[docs/development-workflow.md]] | [Development workflow](development-workflow.md) | Branches, delivery modes, PRs, promotions, external review, risk gates |
@@ -43,6 +44,7 @@ GitHub navigation.
 | [[docs/uta-live-testing.md]] | [UTA live testing](uta-live-testing.md) | Real broker/demo acceptance scenarios and trading invariants |
 | [[docs/ibkr-wire-protocol.md]] | [IBKR wire protocol](ibkr-wire-protocol.md) | TWS/Gateway inbound framing, payload-only decoder contract, failure isolation, and verification |
 | [[docs/market-data-architecture.md]] | [Market data architecture](market-data-architecture.md) | TraderHub/reference data, BarService K-lines, and the private provider compatibility layer |
+| [[docs/ibiv-monitor-context.md]] | [IbIvMonitor context and MCP](ibiv-monitor-context.md) | Immutable evidence, 20-tool MCP dialogue, IBKR news and monitor-owned research acquisition |
 
 Other files under `docs/images/` are README/product assets rather than owner
 guides.

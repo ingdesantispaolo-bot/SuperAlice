@@ -29,6 +29,12 @@ the durable truth after it changes. Git history is the archive.
 
 ## Active
 
+- [[plans/market-memory.md]] — Workspace-owned market catalog, immutable
+  evidence and temporal thesis events; first offline get_market_context and
+  producer coordination, without a new model loop or IBKR collection owner.
+
+- [[plans/ibiv-monitor-context.md]] — IbIvMonitor file-only macro/GEX research context; local implementation and shared-TWS/five-session acceptance, no new execution authority.
+
 - [[plans/settings-machines-dialog.md]] — Move machine management into General / Machines and replace inline SSH setup with a reviewed dialog; Draft PR only.
 
 - [[plans/review-updates-shared-plan.md]] — Share automatic/manual update review
