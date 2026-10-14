@@ -1,6 +1,6 @@
 # Market memory and offline context
 
-Status: first local increment delivered 2026-10-14; producer contract follow-up in progress.
+Status: first local increment and X1/X2 delivered 2026-10-14; context v2, indexing and producer follow-up remain in progress.
 Related coordination: SUPERAI-MEMORY-READONLY-01 in the monitor owner's shared
 coordination document. No C# source or acquisition changes in this increment.
 Owner guides: docs/market-data-architecture.md, docs/workspace-agent-guidance.md,
@@ -41,4 +41,57 @@ Receipts: ../../dev/evidence/market-memory (local-only metadata).
 Completion: local consumer acceptance plus the producer contract reconciliation
 needed for source-backed histories. A local pilot alone does not complete the
 whole memory/market-data initiative. Preserve existing dirty/local initiatives;
-no upstream publishing or source-repository commits in this local iteration.
+Source increments are now saved on superai/hardening as explicitly requested
+on 2026-10-14. No upstream publishing is authorized.
+
+## Coordinated 2026-10-14 plan
+
+Canonical user plan in the surrounding SuperAi workspace:
+SuperAI-Mappa-Memoria-Piano-di-Lavoro-2026-10-14.md. Append-only coordination:
+dev/coordinamento-superai.md in that workspace. Codex owns X0-X7; Claude owns
+the map, outcomes and setup scanner.
+Shared-file changes and contract clarifications are announced there first.
+
+- X0 source preservation: fifteen coherent commits through 6da30896 save the
+  hardening WIP and real additional changes from openalice, ignoring CRLF-only
+  differences and retaining the hardening trading-permission correction.
+  Root/test/UTA/UI typechecks and relevant memory/monitor/budget/badge tests pass.
+  The complete hermetic audit had 7,751 passes, 38 failures, 157 skips; its
+  memory-suite inventory regression was fixed. Targeted failure recheck has
+  427 passes, 24 failures, 7 skips, outside memory (Windows symlink privileges,
+  paths/pnpm behavior, unrelated UI/update assertions and timeouts). This is
+  not a claim of a wholly green repository backstop; receipts remain local.
+- [x] X1: mixed immutable v1/v2 replay, economic assets/series, required authors,
+  host origin, registered closed-bar conditions, controlled activation,
+  approvals, checks, signals, judgments and lessons. Chat cannot activate;
+  user theses and approved/retired lessons require exact current user consent.
+  Approval preserves candidate content and cannot be reused after rejection
+  or a new interpretation version. Thesis author type cannot be changed to
+  bypass consent. C2 metadata, monthly registry coverage and derived units are
+  accepted without treating monthly values as daily conditions.
+- [x] X2: user terminal command and dedicated approval route, excluded from
+  agent tool catalogs and record JSON; Agent identity env/headers are refused.
+  Document the shared-Windows-user behavior boundary without claiming isolation.
+- [ ] X3: context v2 with latest condition outcomes, signals, scoped approved
+  lessons and judgments. Until then context/1 does not retrieve these new kinds.
+- [ ] X4: derived SQLite index, incremental verification, dead-owner lock
+  recovery and 50,000-event load proof; keep the 10,000-event cap until then.
+- [ ] X5-X7: confirmed signal ingestion, managed guidance in all three desks,
+  and the monitor owner's read-only external-series/thesis contract.
+
+X1/X2 verification: 32 domain/tool assertions including one 500-result nightly
+check; 97 targeted CLI/export/catalog assertions before the final C2 additions;
+three real CLI/HTTP/Git memory tests; ten existing CLI-shim tests; app and
+registered-suite typechecks. critical-local passes outside the Windows sandbox
+(19 assertions and all 15 required evidence items), after sandbox process
+termination/cleanup failures. The existing private 27-file archive restores
+with identical bytes/context using the mixed reader and no monitor access.
+Direct synthetic compatibility with Claude's C2 measureCatalog passes.
+
+Every check stays one event (up to 500 results and 256 KB); larger payloads fail
+explicitly. The event-count and 64 MB scan caps remain. Derived C2 source
+expressions need stable catalog series identifiers before being referenced by
+conditions; ordinary measures are not blocked by unused unresolved definitions.
+No Claude-owned sources or C# code were changed. No production approvals, thesis
+activations, orders, schedule changes, managed-desk rollout or public push were
+performed by these acceptance tests.
