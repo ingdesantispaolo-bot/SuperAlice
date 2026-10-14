@@ -156,6 +156,29 @@ invoke alice memory approve, or clear their Session identity to imitate the
 user. market_memory_record rejects approvals. The shared Windows user means
 this is a behavior rule, not process isolation; see docs/market-memory.md.
 
-get_market_context remains v1 until X3: it reads v2 thesis authors but does not
-yet retrieve checks, signals, judgments or lessons. Do not infer an absence of
-these kinds from that context packet.
+## Context v2
+
+get_market_context returns superai.market-context/2. Ask for economic asset IDs;
+series queries also resolve their parent asset and sibling series. Legacy series
+without an asset link stay separate. Each latest thesis has author/origin,
+derivedState and latestCheck for that exact version. The reader selects recorded
+checks by evaluatedAt then sequence within knownAsOf. It never recalculates a
+condition. A new thesis version starts without a check. Invalidations met take
+priority; missing/not-evaluable results produce non-valutabile; otherwise targets
+met give obiettivo-raggiunto, triggers met attivata, all not-met integra. No
+conditions/check also means non-valutabile. attivata describes the recorded
+trigger: it does not make a candidate active or replace the approval workflow.
+
+signals includes unexpired entries, newest confirmation first. Use
+--include-expired true only when expired history is needed; expiredAtQuery uses
+the query's knowledge date. lessons includes only latest approved versions whose
+asset scope intersects the requested assets. A specific setupType/regime requires
+matching --setup-type/--regime; without those selectors it is not a general rule.
+judgments holds latest asset/horizon judgments; judgmentGroups holds the latest
+recorded review batch's member judgments, without an invented group aggregate or
+a claim that every member was covered. Every interpretation retains its author.
+Referenced supporting/contrary evidence and lesson counterexamples stay pinned
+and verified, even outside ordinary observation limits/windows. Inspect
+referencedEvents for related prior interpretations. Result/output overflow is
+an error: narrow the scope or raise the reviewed budget; never silently omit
+an interpretation. knownAsOf excludes anything recorded later.

@@ -43,7 +43,7 @@ export const marketMemoryFactories: WorkspaceToolFactory[] = [
   {
     name: 'get_market_context',
     build: ctx => tool({
-      description: 'Retrieve this Workspace local market context: catalog, observations, horizon-specific thesis revisions, supporting/contrary evidence and immutable reconciliations. knownAsOf means knowledge recorded by this memory at that timestamp, not source vintages retroactively reconstructed. Works with the monitor/TWS offline; never re-evaluates a thesis or silently treats stale data as current. Unknown coverage, truncation and output budgets are explicit.',
+      description: 'Retrieve schema-v2 local market context: asset/series catalog, observations, horizon-specific theses with recorded check outcomes/derived states, unexpired signals (includeExpired opts in), matching approved lessons (setupType/regime), latest asset and group member judgments, authors and supporting/contrary evidence. knownAsOf means knowledge recorded by this memory, not retroactively reconstructed source vintages. Monitor/TWS may be offline; retrieval never evaluates conditions or changes thesis activation. Coverage and result/output limits are explicit.',
       inputSchema: memoryContextSchema.extend({ ownerWorkspaceId: ownerId }),
       execute: async ({ ownerWorkspaceId, ...query }) => ({ ownerWorkspaceId: ownerWorkspaceId ?? ctx.workspaceId, ...await getMarketContext(workspace(ctx, ownerWorkspaceId), query) }),
     }),

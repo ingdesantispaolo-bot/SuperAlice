@@ -72,8 +72,11 @@ Shared-file changes and contract clarifications are announced there first.
 - [x] X2: user terminal command and dedicated approval route, excluded from
   agent tool catalogs and record JSON; Agent identity env/headers are refused.
   Document the shared-Windows-user behavior boundary without claiming isolation.
-- [ ] X3: context v2 with latest condition outcomes, signals, scoped approved
-  lessons and judgments. Until then context/1 does not retrieve these new kinds.
+- [x] X3: context v2 with exact-version latest recorded check/derived state,
+  expiring signals, scoped latest approved lessons and latest asset/horizon and
+  group review member judgments. Recursive support/counter-example evidence is
+  retained/verified; result/output overflow fails explicitly. Source verification:
+  38 memory/domain/tool tests, three CLI/HTTP/Git tests, app/test typechecks. Receipts: ../../dev/evidence/market-memory/x3-context.json and x3-cli.json.
 - [ ] X4: derived SQLite index, incremental verification, dead-owner lock
   recovery and 50,000-event load proof; keep the 10,000-event cap until then.
 - [ ] X5-X7: confirmed signal ingestion, managed guidance in all three desks,

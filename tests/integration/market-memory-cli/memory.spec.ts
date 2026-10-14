@@ -59,6 +59,7 @@ describe('scoped market memory through real CLI and filesystem', () => {
     })
     try {
       expect((await run(['memory', 'context', '--help'])).stdout).toContain('knownAsOf')
+      expect((await run(['memory', 'context', '--help'])).stdout).toContain('includeExpired')
       const entry = {
         kind: 'catalog', entityId: 'italy.fitted.10y', label: 'Synthetic fitted curve', assetClass: 'rates', role: 'estimated-curve',
         assetId: 'asset.rates.it.10y', source: 'fixture-bond-export', sourceSeriesId: 'IT-10Y-FIT', currency: 'EUR', unit: 'percent',
@@ -70,7 +71,8 @@ describe('scoped market memory through real CLI and filesystem', () => {
       expect(saved.accepted).toBe(true)
       expect(JSON.parse((await run(['memory', 'catalog'])).stdout).entries).toHaveLength(2)
       const context = JSON.parse((await run(['memory', 'context', '--entity-ids', '["italy.fitted.10y"]'])).stdout)
-      expect(context.catalog[0]).toMatchObject({ role: 'estimated-curve', benchmarkEquivalence: 'not-established' })
+      expect(context.schema).toBe('superai.market-context/2')
+      expect(context.catalog.find((entry: { entityId: string }) => entry.entityId === 'italy.fitted.10y')).toMatchObject({ role: 'estimated-curve', benchmarkEquivalence: 'not-established' })
       expect(context.reevaluation).toMatchObject({ monitorContacted: false, performed: false, requiresNewEvidence: true })
       expect(JSON.parse((await run(['memory', 'catalog'], 'ws2')).stdout).entries).toEqual([])
       expect(JSON.parse((await run(['memory', 'catalog', '--owner-workspace-id', 'ws1'], 'ws2')).stdout).entries).toHaveLength(2)

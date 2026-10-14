@@ -102,10 +102,38 @@ statement, scope and supporting/counter examples. A changed rule is proposed
 again. Evidence referenced by new checks, signals and judgments is hash-verified
 before the event is committed.
 
-The context reader remains superai.market-context/1 until the X3 increment:
-v2 theses and authors are readable, but signal/check/judgment/lesson retrieval
-and derived condition states are not yet implemented. The 10,000-event cap
-remains; an index and incremental verification are the separate X4 increment.
+## Context v2 selection
+
+The reader returns superai.market-context/2. Requesting an economic asset
+includes its registered series; requesting a series also resolves its economic
+asset and sibling series. Legacy identities with no asset link remain distinct.
+Theses include author/origin and latestCheck for their exact event version,
+selected by evaluatedAt then recording sequence within knownAsOf. A new version
+does not inherit a prior version's checks. The derivedState uses recorded results:
+invalidation met wins; otherwise missing/not-evaluable conditions produce
+non-valutabile, then target met gives obiettivo-raggiunto, trigger met attivata,
+and all conditions not-met integra. No conditions/check means non-valutabile.
+This never changes thesis.status or grants activation authority. No live measure
+registry, condition calculation, monitor, source or model participates.
+
+Signals are ordered by confirmation time/sequence and excluded at expiresAt;
+includeExpired opts into expired entries, labeled expiredAtQuery. Historical
+queries apply expiry at their knowledge date. Only the latest approved lesson
+version is eligible. Restricted asset scopes must intersect resolved assets;
+setupType/regime scopes require the same supplied query value. An omitted
+selector does not imply a match. Global scopes match every requested asset.
+
+judgments contains the latest asset/horizon entries. judgmentGroups contains
+the latest reviewRunId batch for each relevant group/horizon, with its recorded
+member judgments and their authors. It does not invent an aggregate judgment
+or attest that the group batch covered every intended member. Supporting and
+counter-example references are recursively retained in observations/evidence
+and referencedEvents, including outside the ordinary window/observation limit.
+Selected evidence bytes are hash-verified, including check-only metric inputs.
+Interpretation/group result overflow and output overflow fail explicitly;
+ordinary observation truncation remains labeled in coverage.
+
+The 10,000-event cap remains; indexing and incremental verification are X4.
 
 ## User approval surface and isolation limit
 

@@ -4,19 +4,11 @@ import { isAbsolute, join, relative, resolve } from 'node:path'
 import { z } from 'zod'
 import { memoryEntrySchema, memoryEventSchema as eventSchema, memoryMeasuresSchema, memoryOriginSchema, type MemoryEntry, type MemoryEvent, type MemoryOrigin } from './market-memory-schema.js'
 import { economicAssetId, memoryCatalogEntry, validateMemoryV2 } from './market-memory-validation.js'
+import { memoryContextSchema, selectMarketContext, type MemoryContextQuery } from './market-memory-context.js'
 export { memoryEntrySchema } from './market-memory-schema.js'
 export type { MemoryEntry, MemoryEvent, MemoryOrigin } from './market-memory-schema.js'
-
-const id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/)
-const stamp = z.string().datetime({ offset: true })
-const horizon = z.enum(['intraday', 'swing', 'long-term', 'structural'])
-export const memoryContextSchema = z.object({
-  entityIds: z.array(id).min(1).max(25), horizon: horizon.optional(),
-  observedFrom: stamp.optional(), observedTo: stamp.optional(), knownAsOf: stamp.optional(),
-  limit: z.number().int().min(1).max(100).default(20),
-  maxChars: z.number().int().min(4000).max(64000).default(24000),
-}).strict()
-export type MemoryContextQuery = z.input<typeof memoryContextSchema>
+export { memoryContextSchema } from './market-memory-context.js'
+export type { MemoryContextQuery } from './market-memory-context.js'
 const namespace = 'research/market-memory/v1'
 const archiveAttributes = 'events/** -text\nevidence/** -text\n'
 const MAX_EVENTS = 10_000, MAX_EVENT_BYTES = 256_000, MAX_LOG_BYTES = 64_000_000, MAX_EVIDENCE_BYTES = 4_000_000
@@ -254,58 +246,10 @@ export async function getMarketContext(workspace: string, input: MemoryContextQu
   if (ms(at) > now.getTime() || query.observedFrom && query.observedTo && ms(query.observedFrom) > ms(query.observedTo)) throw new Error('Invalid context time range')
   const root = await memoryRoot(workspace)
   const all = root ? await readEvents(root) : []
-  const events = all.filter(e => ms(e.recordedAt) <= ms(at))
-  const requested = new Set(query.entityIds)
-  const catalog = events.filter(e => e.entry.kind === 'catalog' && requested.has(e.entry.entityId))
-  const unknownEntityIds = query.entityIds.filter(entityId => !catalog.some(e => e.entry.kind === 'catalog' && e.entry.entityId === entityId))
-  const thesisById = new Map<string, MemoryEvent>()
-  for (const event of events) if (event.entry.kind === 'thesis' && event.entry.entityIds.some(entity => requested.has(entity)) && (!query.horizon || event.entry.horizon === query.horizon)) thesisById.set(event.entry.thesisId, event)
-  const theses = [...thesisById.values()]
-  if (theses.length > query.limit) throw new Error('Thesis result limit reached; narrow the query instead of hiding active interpretations')
-  const mandatory = new Set(theses.flatMap(e => e.entry.kind === 'thesis' ? [...e.entry.supportingObservationIds, ...e.entry.contraryObservationIds] : []))
-  const inPeriod = (e: MemoryEvent) => e.entry.kind === 'observation'
-    && (!query.observedFrom || ms(e.entry.observedPeriod.end) >= ms(query.observedFrom))
-    && (!query.observedTo || ms(e.entry.observedPeriod.end) <= ms(query.observedTo))
-  const latest = new Map<string, MemoryEvent>()
-  for (const event of events) if (event.entry.kind === 'observation' && requested.has(event.entry.entityId) && inPeriod(event)) {
-    const e = event.entry
-    latest.set(`${e.entityId}|${e.observationKey}|${ms(e.observedPeriod.start)}|${ms(e.observedPeriod.end)}`, event)
-  }
-  const candidates = [...latest.values()].sort((a, b) => a.entry.kind === 'observation' && b.entry.kind === 'observation' ? ms(b.entry.observedPeriod.end) - ms(a.entry.observedPeriod.end) || b.sequence - a.sequence : 0)
-  const selected = new Map(candidates.slice(0, query.limit).map(e => [e.eventId, e]))
-  for (const ref of mandatory) selected.set(ref, requireKind(events, ref, 'observation'))
-  const observations = [...selected.values()].map(event => {
-    if (event.entry.kind !== 'observation') throw new Error('Not an observation')
-    const e = event.entry
-    const withinPeriod = inPeriod(event)
-    const stale = e.expiresAt !== null && ms(e.expiresAt) <= ms(at)
-    const freshnessUnknown = e.expiresAt === null
-    const superseded = events.some(other => other.entry.kind === 'observation' && other.entry.supersedesId === event.eventId)
-    return { eventId: event.eventId, ...e, recordedAt: event.recordedAt, verification: 'source-attributed-not-independently-verified', outsideRequestedPeriod: !withinPeriod,
-      usableForReevaluation: withinPeriod && !freshnessUnknown && !stale && !superseded && e.quality === 'usable' && e.finality === 'final', staleAtQuery: stale, freshnessUnknown, supersededAtQuery: superseded }
-  })
-  const evidenceIds = new Set(observations.flatMap(e => e.evidenceIds))
+  const { evidenceEvents, output } = selectMarketContext(all, query, at)
   const evidence = []
-  for (const ref of evidenceIds) evidence.push(await verifyEvidence(root!, requireKind(events, ref, 'evidence')))
-  const reconciliations = events.filter(e => e.entry.kind === 'reconciliation' && (selected.has(e.entry.observationId) || evidenceIds.has(e.entry.originalEvidenceId)))
-  // Retain/verify the original side of each reconciliation even when it is not a selected observation's source.
-  for (const event of reconciliations) if (event.entry.kind === 'reconciliation' && !evidenceIds.has(event.entry.originalEvidenceId)) {
-    evidence.push(await verifyEvidence(root!, requireKind(events, event.entry.originalEvidenceId, 'evidence')))
-    evidenceIds.add(event.entry.originalEvidenceId)
-  }
-  const output = {
-    schema: 'superai.market-context/1', status: query.knownAsOf && all[0] && ms(at) < ms(all[0].recordedAt) ? 'insufficient-history' : events.length ? 'available' : 'empty',
-    mode: query.knownAsOf ? 'knowledge-as-recorded' : 'current-memory', evaluatedAt: at,
-    coverage: { firstRecordedAt: all[0]?.recordedAt ?? null, lastEligibleRecordedAt: events.at(-1)?.recordedAt ?? null,
-      historicalSourceCoverage: 'not-attested', importsBackdateKnowledge: false, unknownEntityIds,
-      observationResultsTruncated: candidates.length > query.limit, selectedOutsideWindowForThesis: observations.some(e => e.outsideRequestedPeriod) },
-    catalog: catalog.map(e => ({ eventId: e.eventId, ...e.entry })), observations,
-    theses: theses.map(e => ({ eventId: e.eventId, ...e.entry, recordedAt: e.recordedAt, origin: e.origin })), evidence,
-    reconciliations: reconciliations.map(e => ({ eventId: e.eventId, ...e.entry, recordedAt: e.recordedAt })),
-    reevaluation: { performed: false, sourceAccess: 'cached-only', monitorContacted: false,
-      requiresNewEvidence: observations.length === 0 || observations.some(e => !e.usableForReevaluation),
-      reason: 'Context retrieval preserves interpretations; it does not run a fresh thesis evaluation or attest source availability.' },
-  }
-  if (JSON.stringify(output).length > query.maxChars) throw new Error('Context output limit reached; narrow entities/horizon or raise the reviewed budget')
-  return output
+  for (const event of evidenceEvents) evidence.push(await verifyEvidence(root!, event))
+  const packet = { ...output, evidence }
+  if (JSON.stringify(packet).length > query.maxChars) throw new Error('Context output limit reached; narrow entities/horizon or raise the reviewed budget')
+  return packet
 }

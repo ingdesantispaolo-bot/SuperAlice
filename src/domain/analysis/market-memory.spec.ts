@@ -113,8 +113,8 @@ describe('market memory temporal and offline contract', () => {
     await f.append(catalog('italy.fitted.10y', { assetId: 'asset.rates.it.10y', role: 'estimated-curve', assetClass: 'rates', source: 'user-bond-export', unit: 'percent', currency: 'EUR', yieldType: 'unknown', method: { id: 'fit-test', version: '1', description: 'Estimated tenor, not observed benchmark' } }))
     await f.append(catalog('italy.benchmark.10y', { assetId: 'asset.rates.it.10y', role: 'benchmark', assetClass: 'rates', source: 'benchmark-source', unit: 'percent', currency: 'EUR', yieldType: 'yield-to-maturity' }))
     const context = await f.query({ entityIds: ['italy.fitted.10y', 'italy.benchmark.10y'] })
-    expect(context.catalog).toHaveLength(2)
-    expect(context.catalog.every(c => 'benchmarkEquivalence' in c && c.benchmarkEquivalence === 'not-established')).toBe(true)
+    expect(context.catalog).toHaveLength(3)
+    expect(context.catalog.filter(c => c.kind === 'catalog' && c.role !== 'asset').every(c => 'benchmarkEquivalence' in c && c.benchmarkEquivalence === 'not-established')).toBe(true)
     await expect(f.append(catalog('italy.fitted.10y', { role: 'benchmark' }))).rejects.toThrow('identity is immutable')
   })
 
