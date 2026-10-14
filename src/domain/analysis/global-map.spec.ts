@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   applyRelative, computeSeries, deriveSeries, eurFactor, measureCatalog, parseSeries, renderTables,
@@ -56,6 +57,17 @@ describe('global map source parsing', () => {
     expect(parseSeries('mof-jgb', [history, current], '10Y')).toEqual([
       { date: '2026-10-01', value: 3.1 }, { date: '2026-10-02', value: 3.11 },
     ])
+  })
+
+  it('reads only settled monitor sessions from a verified MCP envelope', () => {
+    const canonical = JSON.stringify({ bars: [
+      { session: '2026-10-12', close: 111.1, finality: 'final' },
+      { session: '2026-10-13', close: 111.2, finality: 'partial' },
+    ] })
+    const envelope = (hash: string) => JSON.stringify({ content: [{ type: 'text', text: canonical }], _meta: { 'ibivmonitor/sha256': hash } })
+    expect(parseSeries('monitor', [envelope(createHash('sha256').update(canonical).digest('hex'))], 'FUT:BTP'))
+      .toEqual([{ date: '2026-10-12', value: 111.1 }])
+    expect(() => parseSeries('monitor', [envelope('0'.repeat(64))], 'FUT:BTP')).toThrow('hash mismatch')
   })
 
   it('reads STOXX day.month.year rows and TraderHub valuation cards', () => {

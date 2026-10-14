@@ -60,6 +60,19 @@ const tools = {
   bars: await toolName('data', 'market', 'bars'),
   fred: await toolName('traderhub', 'economy', 'fred-series'),
   board: await toolName('traderhub', 'board', 'get'),
+  monitorDaily: await toolName('data', 'monitor', 'history-daily'),
+}
+
+/** IbIvMonitor answers keep the full MCP envelope; its hash covers content[0].text. */
+async function invokeMonitor(tool, toolArgs) {
+  const res = await fetch(`${gatewayBase('data')}/invoke`, {
+    method: 'POST', headers, body: JSON.stringify({ tool, args: toolArgs }), signal: AbortSignal.timeout(120_000),
+  })
+  const body = await res.json()
+  const text = body.content?.[0]?.text
+  if (!res.ok || body.isError || typeof text !== 'string') throw new Error(text?.slice(0, 300) ?? body.error ?? `HTTP ${res.status}`)
+  if (createHash('sha256').update(text).digest('hex') !== body._meta?.['ibivmonitor/sha256']) throw new Error('Monitor envelope hash mismatch')
+  return JSON.stringify(body)
 }
 
 async function invoke(exportKey, tool, toolArgs) {
@@ -84,6 +97,7 @@ function requestsFor(spec) {
   const s = spec.source, sym = spec.symbol
   if (s === 'yahoo') return [{ key: `yahoo:${sym}`, describe: { tool: tools.bars, args: { symbol: sym, assetClass: spec.assetClass, interval: '1d', start } }, run: () => invoke('data', tools.bars, { symbol: sym, assetClass: spec.assetClass, interval: '1d', start }) }]
   if (s === 'fred') return [{ key: `fred:${sym}`, describe: { tool: tools.fred, args: { symbol: sym, start_date: start } }, run: () => invoke('traderhub', tools.fred, { symbol: sym, start_date: start }) }]
+  if (s === 'monitor') return [{ key: `monitor:${sym}`, describe: { tool: tools.monitorDaily, args: { id: sym } }, run: () => invokeMonitor(tools.monitorDaily, { id: sym }) }]
   if (s === 'traderhub-valuation') return [{ key: 'traderhub:valuation', describe: { tool: tools.board, args: { board: 'valuation' } }, run: () => invoke('traderhub', tools.board, { board: 'valuation' }) }]
   if (s === 'bundesbank') {
     const url = `https://api.statistiken.bundesbank.de/rest/data/${sym}?format=csv&lang=en&startPeriod=${start}`

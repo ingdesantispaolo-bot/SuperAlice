@@ -1,5 +1,6 @@
 // Pure functions for the global market map: source parsing, measures and tables.
 // No network, no clock, no model: the same inputs always produce the same output.
+import { createHash } from 'node:crypto'
 
 export const METHOD_VERSION = 'global-map-measures/1'
 
@@ -66,6 +67,16 @@ export function parseSeries(source, texts, symbol) {
       for (const line of csvLines(text)) {
         const m = /^(\d{2})\.(\d{2})\.(\d{4});([^;]+);([-\d.]+)$/.exec(line.trim())
         if (m && m[4] === symbol) points.push({ date: `${m[3]}-${m[2]}-${m[1]}`, value: Number(m[5]) })
+      }
+    } else if (source === 'monitor') {
+      // IbIvMonitor MCP envelope: verify the canonical text, keep only settled sessions.
+      const envelope = JSON.parse(text)
+      const canonical = envelope.content?.[0]?.text
+      if (typeof canonical !== 'string' || createHash('sha256').update(canonical).digest('hex') !== envelope._meta?.['ibivmonitor/sha256']) {
+        throw new Error('Monitor evidence hash mismatch')
+      }
+      for (const b of JSON.parse(canonical).bars ?? []) {
+        if (b.finality === 'final') points.push({ date: b.session, value: b.close })
       }
     } else if (source === 'traderhub-valuation') {
       const card = (JSON.parse(text).cards ?? []).find(c => c.id === symbol)
