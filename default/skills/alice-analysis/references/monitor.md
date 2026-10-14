@@ -31,6 +31,25 @@ It reconnects when the monitor starts. It never reads accounts or places orders.
    `market-state-history` when relevant. Get available variants/windows from the
    catalog and report those used. A correlation is not an executable hedge.
 
+For GEX detail, list `alice monitor gex-monitors`, then read `gex-profile
+--underlying SPX` (ES price space), NDX (NQ) or a monitored single chain (its
+underlying's price space). Use live help for source, expiry, range-pct, max-bars,
+top-n, layout and include-curve. Preserve aligned strike vectors, units,
+algorithm, coverage and sourceAt; GEX estimates dealer positioning from model
+assumptions. A stopped profile is degraded and an uncomputed profile is
+insufficient_data, even if generatedAt is current.
+
+For a needed research chain, `gex-monitor-start --symbol AAPL --sec-type STK`
+requests acquisition inside the existing monitor (STK/IND/FUT, USD). Start is
+idempotent and follows operator/manual priority, the research GEX windows and
+McpAllowDataRequests; the operator cap defaults to four concurrent MCP chains.
+It creates no broker client, OS process, account access or order. Inspect the
+returned state: waiting-acquisition/scheduled does not prove a usable profile.
+Release your request with `gex-monitor-stop --symbol AAPL`; user-owned monitors
+and SPX/NDX families are protected. Temporary MCP rows disappear on restart.
+After a transport error inspect gex-monitors before deciding whether to retry;
+the client never automatically replays an acquisition request.
+
 Examples (arrays accept repeated flags; discover exact schemas with --help):
 
 ```bash
