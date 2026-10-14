@@ -8,11 +8,11 @@ import { appendMemoryEntry, getMarketContext, readMemoryCatalog, type MemoryEntr
 const dirs: string[] = []
 const sha = (value: string | Buffer) => createHash('sha256').update(value).digest('hex')
 const baseTime = Date.parse('2026-10-14T10:00:00Z')
-const origin = { workspaceId: 'fixture-desk', resumeId: 'resume-fixture' }
+const origin = { kind: 'session' as const, workspaceId: 'fixture-desk', resumeId: 'resume-fixture' }
 const entityId = 'gold.spot.test'
 const catalog = (entity = entityId, changes = {}) => ({
   kind: 'catalog', entityId: entity, label: 'Synthetic fixture, not a market observation', assetClass: 'commodity',
-  role: 'observed-series', source: 'fixture', sourceSeriesId: entity, currency: 'USD', unit: 'USD/oz',
+  role: 'observed-series', assetId: 'asset.cmd.gold.test', source: 'fixture', sourceSeriesId: entity, currency: 'USD', unit: 'USD/oz',
   method: { id: 'fixture-close', version: '1', description: 'Test only' }, yieldType: null, benchmarkEquivalence: 'not-established', ...changes,
 })
 async function fixture() {
@@ -21,6 +21,7 @@ async function fixture() {
   let tick = 0
   const append = (entry: unknown) => appendMemoryEntry(dir, entry, origin, new Date(baseTime + ++tick * 1000))
   const query = (input = {}) => getMarketContext(dir, { entityIds: [entityId], ...input }, new Date(baseTime + 100_000))
+  await append({ kind: 'catalog', entityId: 'asset.cmd.gold.test', label: 'Synthetic gold asset', assetClass: 'commodity', role: 'asset' })
   await append(catalog())
   const original = JSON.stringify({ source: 'synthetic', observedAt: '2023-10-12', value: 2000 }) + '\n'
   await writeFile(join(dir, 'research/original.json'), original)
@@ -35,7 +36,7 @@ async function fixture() {
   const observed = await append(observationInput)
   const thesis = (name: string, horizon = 'long-term', summary = 'Positive long-term fixture thesis') => ({
     kind: 'thesis', thesisId: name, entityIds: [entityId], horizon, version: 1, previousEventId: null,
-    status: 'active', summary, invalidation: 'A documented contrary observation', supportingObservationIds: [observed.eventId], contraryObservationIds: [], openQuestions: ['Need independent verification'],
+    status: 'candidate', author: { type: 'superai', agent: 'codex' }, conditions: [], summary, invalidation: 'A documented contrary observation', supportingObservationIds: [observed.eventId], contraryObservationIds: [], openQuestions: ['Need independent verification'],
   })
   return { dir, append, query, evidence, observed, thesis, observationInput, original }
 }
@@ -78,7 +79,7 @@ describe('market memory temporal and offline contract', () => {
     const replay = await f.query({ knownAsOf: v1.recordedAt })
     expect(before).toEqual(replay)
     expect(before.theses).toHaveLength(1)
-    expect(before.theses[0]).toMatchObject({ version: 1, status: 'active' })
+    expect(before.theses[0]).toMatchObject({ version: 1, status: 'candidate' })
     expect((await f.query()).theses[0]).toMatchObject({ version: 2, status: 'invalidated' })
   })
 
@@ -87,7 +88,7 @@ describe('market memory temporal and offline contract', () => {
     await f.append(f.thesis('gold-long'))
     await rm(join(f.dir, 'research/original.json')) // Source disappears, verified copy survives.
     const context = await f.query()
-    expect(context.theses[0]).toMatchObject({ status: 'active' })
+    expect(context.theses[0]).toMatchObject({ status: 'candidate' })
     expect(context.observations[0]).toMatchObject({ staleAtQuery: true, usableForReevaluation: false })
     expect(context.reevaluation.requiresNewEvidence).toBe(true)
     expect(context.evidence).toHaveLength(1)
@@ -108,8 +109,9 @@ describe('market memory temporal and offline contract', () => {
 
   it('keeps BTP fitted and benchmark yields distinct and refuses identity replacement', async () => {
     const f = await fixture()
-    await f.append(catalog('italy.fitted.10y', { role: 'estimated-curve', assetClass: 'rates', source: 'user-bond-export', unit: 'percent', currency: 'EUR', yieldType: 'unknown', method: { id: 'fit-test', version: '1', description: 'Estimated tenor, not observed benchmark' } }))
-    await f.append(catalog('italy.benchmark.10y', { role: 'benchmark', assetClass: 'rates', source: 'benchmark-source', unit: 'percent', currency: 'EUR', yieldType: 'yield-to-maturity' }))
+    await f.append({ kind: 'catalog', entityId: 'asset.rates.it.10y', label: 'Synthetic Italian rates', assetClass: 'rates', role: 'asset' })
+    await f.append(catalog('italy.fitted.10y', { assetId: 'asset.rates.it.10y', role: 'estimated-curve', assetClass: 'rates', source: 'user-bond-export', unit: 'percent', currency: 'EUR', yieldType: 'unknown', method: { id: 'fit-test', version: '1', description: 'Estimated tenor, not observed benchmark' } }))
+    await f.append(catalog('italy.benchmark.10y', { assetId: 'asset.rates.it.10y', role: 'benchmark', assetClass: 'rates', source: 'benchmark-source', unit: 'percent', currency: 'EUR', yieldType: 'yield-to-maturity' }))
     const context = await f.query({ entityIds: ['italy.fitted.10y', 'italy.benchmark.10y'] })
     expect(context.catalog).toHaveLength(2)
     expect(context.catalog.every(c => 'benchmarkEquivalence' in c && c.benchmarkEquivalence === 'not-established')).toBe(true)
@@ -151,7 +153,7 @@ describe('market memory temporal and offline contract', () => {
     const forged = JSON.stringify({ content: [{ type: 'text', text: '{"value":1}' }], _meta: { 'ibivmonitor/sha256': '0'.repeat(64) } })
     await writeFile(join(f.dir, 'research/forged.json'), forged)
     await expect(f.append({ kind: 'evidence', originalPath: 'research/forged.json', sha256: sha(forged), format: 'mcp', description: 'forged', originalRunId: null })).rejects.toThrow('Canonical MCP')
-    expect((await readMemoryCatalog(f.dir)).recordCount).toBe(3)
+    expect((await readMemoryCatalog(f.dir)).recordCount).toBe(4)
   })
 
   it('uses no monitor connection while reading a valid canonical MCP copy', async () => {

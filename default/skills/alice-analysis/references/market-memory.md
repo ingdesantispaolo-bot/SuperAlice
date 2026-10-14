@@ -91,3 +91,64 @@ thesis evidence is retained. Overflow/corruption fail explicitly: narrow the
 query or build a reviewed derived index, do not claim complete coverage.
 The index can be rebuilt without LLM re-extraction. Existing run/latest formats
 remain intact. Full historical-source coverage is explicitly not attested.
+
+## v2 writing contract
+
+New records use schema v2; legacy records remain readable without rewriting.
+For a new catalog identity, an economic asset uses role: asset and the common
+entityId/label/assetClass fields, without source, sourceSeriesId or method.
+Register it before its series. New series retain all the fields above and add
+assetId pointing to that economic asset. Legacy series need no rewrite.
+Observations use series identities; asset theses can cite their observations.
+
+Thesis, signal, judgment and lesson JSON must include
+author: {type: "superai"|"user"|"monitor-analyst", agent?: "claude"|"codex"|...}.
+Transcribe a user's opinion with type: user and status: candidate. origin is
+assigned by the host and is never a JSON field for the writer to provide.
+
+Thesis adds conditions (empty is allowed for candidates) and optional
+activationBasis. Each condition is
+{conditionId, role: invalidation|trigger|target|review, assetId, measureKey,
+timeframe: 1D|1W|1H, op: >|>=|<|<=, threshold: number|{assetId,measureKey},
+consecutive: 1..10, activeFrom?, expiresAt?}.
+Only registered measures with completedBarsOnly: true are eligible. They are
+defined in research/market-assistant/global-map/measures.json; unknown keys,
+timeframes, catalog series or units are explicit errors. Never invent a measure.
+
+Chat writes candidate theses. It cannot activate, including after user consent.
+An active thesis must have an invalidation condition or a review with expiresAt.
+The scheduled review uses activationBasis: {type: "scheduled-review", issueId}
+matching its host origin. A user-authored thesis instead requires
+{type: "user-approval", approvalEventId}, naming the current user decision on
+the exact preceding candidate; preserve that candidate's content in the revision.
+
+New kinds (kind and author where indicated are additional to these fields):
+
+- check: runId, evaluatedAt, metricsEvidenceId, results
+  [{thesisEventId, conditionId, result: met|not-met|not-evaluable,
+  value: number|null, observedAt: ISO|null, reason?}]. Write once per control.
+  not-evaluable needs a reason. Evaluation never uses open bars.
+- signal (author required): signalId, assetIds, horizon: intraday|swing,
+  signalType, summary, confirmedAt, expiresAt (required, at most seven days),
+  relatedThesisIds (event hashes), sourceRunId, observationIds and/or evidenceIds.
+  Preserve a stable signalId across repeated detections to prevent duplicates.
+- judgment (author required): reviewRunId, groupId, assetId,
+  horizon: swing|long-term, dimensions: {valuation,fundamentals,technical,risk},
+  coverage, relativePreference, confidence, rationale, observationIds,
+  metricsEvidenceId. Dimensions: favorable|neutral|unfavorable|not-available;
+  coverage: technical-only|partial-fundamentals|complete; relativePreference:
+  preferred|neutral|less-preferred|not-assessed; confidence: low|medium|high.
+- lesson (author required): lessonId, version, previousEventId (null for v1),
+  statement, scope: {setupType?,regime?,assetIds?}, supportingEventIds (at least
+  three distinct events), counterEventIds, status: proposed|approved|rejected|retired.
+  Approved/retired revisions need user approval of the exact prior version;
+  keep the approved content, then reference its event and increment version.
+
+approval is exclusively for the user's terminal. Agents must never write it,
+invoke alice memory approve, or clear their Session identity to imitate the
+user. market_memory_record rejects approvals. The shared Windows user means
+this is a behavior rule, not process isolation; see docs/market-memory.md.
+
+get_market_context remains v1 until X3: it reads v2 thesis authors but does not
+yet retrieve checks, signals, judgments or lessons. Do not infer an absence of
+these kinds from that context packet.

@@ -2,68 +2,14 @@ import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, open, readFile, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { z } from 'zod'
+import { memoryEntrySchema, memoryEventSchema as eventSchema, memoryMeasuresSchema, memoryOriginSchema, type MemoryEntry, type MemoryEvent, type MemoryOrigin } from './market-memory-schema.js'
+import { economicAssetId, validateMemoryV2 } from './market-memory-validation.js'
+export { memoryEntrySchema } from './market-memory-schema.js'
+export type { MemoryEntry, MemoryEvent, MemoryOrigin } from './market-memory-schema.js'
 
 const id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/)
-const hash = z.string().regex(/^[a-f0-9]{64}$/)
 const stamp = z.string().datetime({ offset: true })
 const horizon = z.enum(['intraday', 'swing', 'long-term', 'structural'])
-const method = z.object({ id, version: z.string().min(1).max(80), description: z.string().max(1000) }).strict()
-const text = z.string().min(1).max(2000)
-const refs = z.array(hash).min(1).max(12)
-const catalogSchema = z.object({
-  kind: z.literal('catalog'), entityId: id, label: text,
-  assetClass: z.enum(['equity', 'rates', 'credit', 'currency', 'commodity', 'crypto', 'volatility', 'macro', 'research']),
-  role: z.enum(['observed-series', 'estimated-curve', 'benchmark', 'proxy', 'research-artifact']),
-  source: z.string().min(1).max(300), sourceSeriesId: z.string().min(1).max(300),
-  currency: z.string().regex(/^[A-Z]{3}$/).nullable(), unit: z.string().min(1).max(100), method,
-  yieldType: z.enum(['yield-to-maturity', 'zero-coupon', 'par', 'unknown']).nullable(),
-  benchmarkEquivalence: z.literal('not-established'),
-  availability: z.enum(['pending', 'evidence-only', 'source-verified']).default('evidence-only'),
-}).strict()
-const evidenceSchema = z.object({
-  kind: z.literal('evidence'), originalPath: z.string().min(1).max(500), sha256: hash,
-  format: z.enum(['mcp', 'json', 'text']), description: text,
-  originalRunId: id.nullable(),
-}).strict()
-const observationSchema = z.object({
-  kind: z.literal('observation'), entityId: id, observationKey: id,
-  value: z.number().finite().nullable(), unit: z.string().min(1).max(100),
-  observedPeriod: z.object({ start: stamp, end: stamp }).strict(),
-  periodBasis: z.enum(['source-observation', 'session-date-label', 'economic-period', 'unknown']).default('unknown'),
-  publishedAt: stamp.nullable(), acquiredAt: stamp,
-  acquisitionBasis: z.enum(['source-fetch', 'artifact-import', 'producer-record']).default('artifact-import'),
-  sourceFetchedAt: stamp.nullable().default(null),
-  publicationBasis: z.enum(['source-declared', 'unknown']),
-  quality: z.enum(['usable', 'degraded', 'stale', 'missing']),
-  finality: z.enum(['final', 'partial', 'unknown']), expiresAt: stamp.nullable(),
-  evidenceIds: refs, supersedesId: hash.nullable(), note: z.string().max(2000),
-}).strict()
-const thesisSchema = z.object({
-  kind: z.literal('thesis'), thesisId: id, entityIds: z.array(id).min(1).max(8), horizon,
-  version: z.number().int().positive(), previousEventId: hash.nullable(),
-  status: z.enum(['candidate', 'active', 'invalidated', 'resolved', 'superseded']),
-  interpretationAt: stamp.nullable().default(null),
-  summary: text, invalidation: text,
-  supportingObservationIds: refs, contraryObservationIds: z.array(hash).max(12),
-  openQuestions: z.array(z.string().min(1).max(500)).max(8),
-}).strict()
-const reconciliationSchema = z.object({
-  kind: z.literal('reconciliation'), originalEvidenceId: hash, observationId: hash,
-  result: z.enum(['same', 'different', 'not-comparable']), explanation: text,
-}).strict()
-export const memoryEntrySchema = z.discriminatedUnion('kind', [catalogSchema, evidenceSchema, observationSchema, thesisSchema, reconciliationSchema])
-export type MemoryEntry = z.infer<typeof memoryEntrySchema>
-const persistedEntrySchema = z.union([
-  catalogSchema, evidenceSchema.extend({ storedPath: z.string().min(1).max(500) }).strict(),
-  observationSchema, thesisSchema, reconciliationSchema,
-])
-const eventSchema = z.object({
-  schemaVersion: z.literal(1), sequence: z.number().int().positive(), recordedAt: stamp,
-  previousHash: hash.nullable(),
-  origin: z.object({ workspaceId: id, resumeId: id.nullable() }).strict(),
-  entry: persistedEntrySchema,
-}).strict()
-export type MemoryEvent = z.infer<typeof eventSchema> & { eventId: string }
 export const memoryContextSchema = z.object({
   entityIds: z.array(id).min(1).max(25), horizon: horizon.optional(),
   observedFrom: stamp.optional(), observedTo: stamp.optional(), knownAsOf: stamp.optional(),
@@ -191,7 +137,7 @@ function validateEntry(events: MemoryEvent[], entry: MemoryEntry, recordedAt: st
         || JSON.stringify(previous.entry.entityIds) !== JSON.stringify(entry.entityIds))) throw new Error('Thesis revision or horizon identity mismatch')
     for (const ref of [...entry.supportingObservationIds, ...entry.contraryObservationIds]) {
       const observed = requireKind(events, ref, 'observation').entry
-      if (observed.kind !== 'observation' || !entry.entityIds.includes(observed.entityId)) throw new Error('Thesis evidence belongs to a different entity')
+      if (observed.kind !== 'observation' || !entry.entityIds.some(entity => economicAssetId(events, entity) === economicAssetId(events, observed.entityId))) throw new Error('Thesis evidence belongs to a different entity')
     }
   }
   if (entry.kind === 'reconciliation') {
@@ -221,7 +167,8 @@ async function verifyEvidence(root: string, event: MemoryEvent) {
 }
 
 /** Append-only writes under one exclusive lock, no backdating API. */
-export async function appendMemoryEntry(workspace: string, entryInput: unknown, origin: MemoryEvent['origin'], now = new Date()) {
+export async function appendMemoryEntry(workspace: string, entryInput: unknown, hostOrigin: MemoryOrigin, now = new Date(), authority: { scheduledReviewIssueId?: string } = {}) {
+  const origin = memoryOriginSchema.parse(hostOrigin)
   const entry = memoryEntrySchema.parse(entryInput)
   const root = (await memoryRoot(workspace, true))!
   const lockPath = join(root, '.writer.lock'), owner = randomUUID()
@@ -232,6 +179,17 @@ export async function appendMemoryEntry(workspace: string, entryInput: unknown, 
     if (events.length >= MAX_EVENTS) throw new Error('Memory event limit reached')
     const recordedAt = new Date(Math.max(now.getTime(), events.length ? ms(events.at(-1)!.recordedAt) + 1 : 0)).toISOString()
     validateEntry(events, entry, recordedAt)
+    let measures: z.infer<typeof memoryMeasuresSchema> | undefined
+    if (entry.kind === 'thesis' && entry.conditions.length) {
+      const workspaceRoot = await realpath(workspace)
+      try {
+        measures = memoryMeasuresSchema.parse(JSON.parse((await checkedRead(workspaceRoot, join(workspaceRoot, 'research/market-assistant/global-map/measures.json'), MAX_EVIDENCE_BYTES)).toString('utf8')))
+      } catch (error) {
+        if (isMissing(error)) throw new Error('Measures registry unavailable: research/market-assistant/global-map/measures.json')
+        throw error
+      }
+    }
+    validateMemoryV2(events, entry, origin, recordedAt, measures, authority.scheduledReviewIssueId)
     let persisted: unknown = entry
     if (entry.kind === 'evidence') {
       const normalized = entry.originalPath.replaceAll('\\', '/')
@@ -243,17 +201,25 @@ export async function appendMemoryEntry(workspace: string, entryInput: unknown, 
       const storedPath = `evidence/${entry.sha256}.${entry.format === 'text' ? 'txt' : 'json'}`
       const evidenceEntry = { ...entry, storedPath }
       persisted = evidenceEntry
-      const provisional = { schemaVersion: 1 as const, sequence: events.length + 1, recordedAt, previousHash: events.at(-1)?.eventId ?? null, origin, entry: evidenceEntry, eventId: '' }
+      const provisional = { schemaVersion: 2 as const, sequence: events.length + 1, recordedAt, previousHash: events.at(-1)?.eventId ?? null, origin, entry: evidenceEntry, eventId: '' }
       await directory(root, 'evidence', true)
       try { await writeFile(join(root, storedPath), bytes, { flag: 'wx' }) } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
       }
       await verifyEvidence(root, provisional)
     }
-    if (entry.kind === 'observation') {
-      for (const ref of entry.evidenceIds) await verifyEvidence(root, requireKind(events, ref, 'evidence'))
+    const evidenceRefs = entry.kind === 'observation' ? entry.evidenceIds
+      : entry.kind === 'signal' ? entry.evidenceIds ?? []
+        : entry.kind === 'check' || entry.kind === 'judgment' ? [entry.metricsEvidenceId] : []
+    const observationRefs = entry.kind === 'thesis' ? [...entry.supportingObservationIds, ...entry.contraryObservationIds]
+      : entry.kind === 'signal' || entry.kind === 'judgment' ? entry.observationIds ?? [] : []
+    const allEvidenceRefs = new Set(evidenceRefs)
+    for (const ref of observationRefs) {
+      const observation = requireKind(events, ref, 'observation').entry
+      if (observation.kind === 'observation') for (const evidenceId of observation.evidenceIds) allEvidenceRefs.add(evidenceId)
     }
-    const event = eventSchema.parse({ schemaVersion: 1, sequence: events.length + 1, recordedAt, previousHash: events.at(-1)?.eventId ?? null, origin, entry: persisted })
+    for (const ref of allEvidenceRefs) await verifyEvidence(root, requireKind(events, ref, 'evidence'))
+    const event = eventSchema.parse({ schemaVersion: 2, sequence: events.length + 1, recordedAt, previousHash: events.at(-1)?.eventId ?? null, origin, entry: persisted })
     const bytes = JSON.stringify(event) + '\n', eventId = digest(bytes)
     if (Buffer.byteLength(bytes) > MAX_EVENT_BYTES) throw new Error('Event exceeds memory write limit')
     const eventsDir = (await directory(root, 'events', true))!

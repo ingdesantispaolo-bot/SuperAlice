@@ -2,6 +2,7 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import type { WorkspaceToolFactory } from '../core/workspace-tool-center.js'
 import { appendMemoryEntry, getMarketContext, memoryContextSchema, readMemoryCatalog } from '../domain/analysis/market-memory.js'
+import type { MemoryOrigin } from '../domain/analysis/market-memory-schema.js'
 
 const ownerId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/).optional()
 function workspace(ctx: Parameters<WorkspaceToolFactory['build']>[0], ownerWorkspaceId = ctx.workspaceId) {
@@ -21,9 +22,22 @@ export const marketMemoryFactories: WorkspaceToolFactory[] = [
   {
     name: 'market_memory_record',
     build: ctx => tool({
-      description: 'Append a catalog/evidence/observation/thesis/reconciliation event to this Workspace memory. --entry-json-file reads the structured entry from a file. Existing snapshots remain immutable. The host stamps recordedAt; importing old evidence never backdates knowledge. See alice-analysis references/market-memory.md for the reviewed schema. Research only, no trading or configuration authority.',
+      description: 'Append a schema-v2 catalog/evidence/observation/thesis/reconciliation/check/signal/judgment/lesson event to this Workspace memory. Approvals belong exclusively to the user terminal. Chat writes candidate theses; activation needs a host scheduled review and a valid basis. --entry-json-file reads structured JSON. Existing snapshots remain immutable. The host stamps origin/recordedAt; imports never backdate knowledge. See alice-analysis references/market-memory.md. Research only, no trading authority.',
       inputSchema: z.object({ entryJson: z.string().min(2).max(32000) }).strict(),
-      execute: async ({ entryJson }) => appendMemoryEntry(workspace(ctx), JSON.parse(entryJson), { workspaceId: ctx.workspaceId, resumeId: ctx.origin?.resumeId ?? null }),
+      execute: async ({ entryJson }) => {
+        const entry = JSON.parse(entryJson)
+        if (entry?.kind === 'approval') throw new Error('Approvals are available only in the user terminal, never through agent tools')
+        const trigger = ctx.callerRun?.trigger
+        const issue = ctx.origin?.kind === 'headless' && ctx.callerRun?.status === 'running'
+          && ctx.origin.runId === ctx.callerRun.taskId && trigger?.kind === 'issue'
+          && trigger.workspaceId === ctx.workspaceId && trigger.issueId === ctx.origin.issueId ? trigger : undefined
+        const origin: MemoryOrigin = { kind: issue ? 'issue' : 'session', workspaceId: ctx.workspaceId,
+          ...(ctx.origin?.resumeId ? { resumeId: ctx.origin.resumeId } : {}), ...(issue ? { issueId: issue.issueId } : {}) }
+        const detail = issue ? await ctx.board?.detail(ctx.workspaceId, issue.issueId) : undefined
+        const scheduledReviewIssueId = detail?.issue.id === issue?.issueId && detail?.issue.when
+          && !['done', 'canceled'].includes(detail.issue.status) ? issue?.issueId : undefined
+        return appendMemoryEntry(workspace(ctx), entry, origin, undefined, { scheduledReviewIssueId })
+      },
     }),
   },
   {
