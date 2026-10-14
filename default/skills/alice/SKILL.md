@@ -3,6 +3,7 @@ name: alice
 description: >
   Research data and Workspace collaboration through the `alice` CLI:
   symbol discovery, K-line analysis, optional subscribed-article lookup,
+  news/event questions, prior desk research and durable decisions,
   peer conversations, Inbox and Issues. Use CLI help for command parameters.
   Also use alice for Workspace collaboration: peer discovery, Agent conversations,
   Inbox delivery, Issues, Session identity, tracked assets and template upgrades.
@@ -50,6 +51,11 @@ If a search for a non-US name comes up empty, check `alice market vendors`
 
 `alice rss` is an optional quick scan of collected subscription articles,
 with limited coverage. Command parameters are available in `alice rss --help`.
+For news, catalysts or event timelines, read [the RSS procedure](references/news.md).
+When continuing prior research, inspect relevant desk files and the existing
+Inbox, Issues and tracked entities before repeating the analysis. Resume the
+attributable Session when its reasoning matters; a new Session does not load
+all previous conversations automatically.
 
 **Raw K-lines** use the same BarService as the Market chart. The `market-data`
 skill covers source discovery, raw data and chart references in replies:
