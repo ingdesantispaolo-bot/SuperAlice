@@ -29,3 +29,4 @@ export function deriveSeries(op: 'diff' | 'ratio', a: Point[], b: Point[], month
 export function applyRelative(groups: Record<string, { relative: string | null }>, results: MapEntry[]): Record<string, string[]>
 export function measureCatalog(entries: MapEntry[]): Array<{ assetId: string; measureKey: string; timeframe: string; seriesId?: string; unit: string; definition: string; completedBarsOnly: boolean }>
 export function renderTables(metrics: unknown): string
+export function catalogEntries(universe: unknown): Array<Record<string, unknown>>

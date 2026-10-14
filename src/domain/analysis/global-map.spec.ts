@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  applyRelative, computeSeries, deriveSeries, eurFactor, measureCatalog, parseSeries, renderTables,
+  applyRelative, catalogEntries, computeSeries, deriveSeries, eurFactor, measureCatalog, parseSeries, renderTables,
   rsiWilder, shiftDate, valueAt, type MapEntry, type Point,
 } from '../../../default/skills/alice-analysis/scripts/global-map-lib.mjs'
 
@@ -147,6 +148,24 @@ describe('global map measures', () => {
     const a = [{ date: '2026-08-01', value: 3.99 }], b = [{ date: '2026-08-15', value: 3.18 }]
     expect(deriveSeries('diff', a, b, true)[0].value).toBeCloseTo(81)
     expect(deriveSeries('ratio', [{ date: '2026-10-13', value: 10 }], [{ date: '2026-10-13', value: 4 }])).toEqual([{ date: '2026-10-13', value: 2.5 }])
+  })
+})
+
+describe('global map memory catalog', () => {
+  it('lists every economic asset before its series, with economic classes and stable derived ids', () => {
+    const universe = JSON.parse(readFileSync(new URL('../../../default/skills/alice-analysis/references/global-map-universe.json', import.meta.url), 'utf8'))
+    const entries = catalogEntries(universe) as Array<Record<string, unknown>>
+    const firstSeries = entries.findIndex(e => e.role !== 'asset')
+    expect(entries.slice(firstSeries).every(e => e.role !== 'asset')).toBe(true)
+    expect(entries.filter(e => e.role === 'asset')).toHaveLength(65)
+    expect(entries.filter(e => e.role === 'asset').every(e => !('source' in e) && !('method' in e))).toBe(true)
+    const byId = new Map(entries.map(e => [e.entityId, e]))
+    expect(byId.get('series.vol.vix.yahoo')).toMatchObject({ assetClass: 'volatility', assetId: 'asset.vol.vix' })
+    expect(byId.get('series.rates.de.10y.bundesbank')).toMatchObject({ yieldType: 'par', unit: '%', currency: 'EUR' })
+    expect(byId.get('series.rates.it.10y.fred-monthly')).toMatchObject({ yieldType: 'unknown' })
+    expect(byId.get('series.derived.ratio.btp-bund-futures')).toMatchObject({ role: 'proxy', unit: 'ratio', assetId: 'derived.ratio.btp-bund-futures' })
+    for (const e of entries.filter(x => x.role !== 'asset')) expect(byId.get(e.assetId as string)?.assetClass).toBe(e.assetClass)
+    expect(new Set(entries.map(e => e.entityId)).size).toBe(entries.length)
   })
 })
 

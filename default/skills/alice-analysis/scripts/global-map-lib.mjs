@@ -368,6 +368,65 @@ function unitOf(e, key) {
   return e.kind === 'fx' || e.kind === 'price-ratio' ? 'index' : (e.currency ?? 'index')
 }
 
+// ---------------------------------------------------------------- memory catalog
+
+const SOURCE_LABEL = {
+  yahoo: 'Yahoo Finance via OpenAlice market bars', fred: 'FRED via OpenAlice TraderHub', 'traderhub-valuation': 'OpenAlice TraderHub valuation board',
+  bundesbank: 'Deutsche Bundesbank statistics API', 'mof-jgb': 'Japan Ministry of Finance JGB interest rates', stoxx: 'STOXX historical index data',
+  monitor: 'IbIvMonitor daily archive (IBKR)', derived: 'SuperAI global map, derived from registered series',
+}
+const RAW_UNIT = { rate: '%', yield: '%', spread: '%', level: 'index points', index: 'index points', ratio: 'ratio', fx: 'exchange rate' }
+const PAR_SOURCES = new Set(['fred', 'bundesbank', 'mof-jgb'])
+
+/**
+ * Catalog events for the memory registry: every economic asset first, then the
+ * series that measures it. Catalog identities are immutable, so this is derived
+ * only from the versioned universe.
+ */
+export function catalogEntries(universe) {
+  const method = description => ({ id: 'global-map-collect', version: universe.revision, description })
+  const assets = [], series = []
+  const asset = (assetId, label, assetClass, currency) => assets.push({
+    kind: 'catalog', entityId: assetId, label, assetClass, role: 'asset', ...(currency ? { currency } : {}),
+  })
+  for (const a of universe.assets) {
+    asset(a.assetId, a.label, a.assetClass, a.kind === 'price' ? a.currency : null)
+    if (a.series.source === 'none') continue
+    const yieldLike = a.kind === 'yield'
+    series.push({
+      kind: 'catalog', entityId: a.series.seriesId, label: `${a.label} (${a.series.symbol})`, assetClass: a.assetClass,
+      role: a.series.role ?? 'observed-series', assetId: a.assetId, source: SOURCE_LABEL[a.series.source], sourceSeriesId: a.series.symbol,
+      currency: a.kind === 'price' || yieldLike || a.kind === 'rate' || a.kind === 'spread' ? (a.currency ?? null) : null,
+      unit: a.kind === 'price' ? (a.currency ?? 'index points') : RAW_UNIT[a.kind],
+      method: method([a.frequency === 'monthly' ? 'Monthly series.' : 'Daily series.', a.notes ?? ''].join(' ').trim()),
+      yieldType: yieldLike ? (PAR_SOURCES.has(a.series.source) && a.frequency !== 'monthly' ? 'par' : 'unknown') : null,
+      benchmarkEquivalence: 'not-established', availability: 'source-verified',
+    })
+  }
+  for (const m of universe.macro) {
+    asset(m.assetId, m.label, m.assetClass, null)
+    series.push({
+      kind: 'catalog', entityId: m.seriesId, label: `${m.label} (${m.symbol})`, assetClass: m.assetClass, role: 'observed-series',
+      assetId: m.assetId, source: SOURCE_LABEL[m.source], sourceSeriesId: m.symbol, currency: null, unit: RAW_UNIT[m.kind],
+      method: method(`${m.frequency === 'monthly' ? 'Monthly' : 'Daily'} series.`),
+      yieldType: m.kind === 'yield' ? (m.frequency === 'monthly' ? 'unknown' : 'par') : null,
+      benchmarkEquivalence: 'not-established', availability: 'source-verified',
+    })
+  }
+  for (const d of universe.derived) {
+    asset(d.assetId, d.label, d.assetClass, null)
+    const formula = d.op === 'ratio' ? `${d.a} / ${d.b}` : `(${d.a} - ${d.b}) x 100`
+    series.push({
+      kind: 'catalog', entityId: d.seriesId, label: d.label, assetClass: d.assetClass,
+      role: d.assetId === 'derived.ratio.btp-bund-futures' ? 'proxy' : 'observed-series', assetId: d.assetId,
+      source: SOURCE_LABEL.derived, sourceSeriesId: formula, currency: null, unit: d.op === 'ratio' ? 'ratio' : 'bp',
+      method: method(`Derived: ${formula}. ${d.notes ?? ''}`.trim()), yieldType: null,
+      benchmarkEquivalence: 'not-established', availability: 'source-verified',
+    })
+  }
+  return [...assets, ...series]
+}
+
 // ---------------------------------------------------------------- tables
 
 const fmt = (x, digits = 1, signed = false) => {
