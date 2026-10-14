@@ -20,14 +20,21 @@ explicit (`source: "none"`) and stay visible in the map.
 Run inside the owning desk shell:
 
 ```bash
-node .agents/skills/alice-analysis/scripts/global-map-collect.mjs [--start 2004-01-01] [--run-id <id>]
+node .agents/skills/alice-analysis/scripts/global-map-collect.mjs [--start YYYY-MM-DD] [--run-id <id>]
 ```
 
 It reads Yahoo bars and FRED/TraderHub data through this Workspace's own CLI
-gateway, and Bundesbank, Japan MOF and STOXX files from their official URLs. It
-creates `research/market-assistant/runs/<runId>/` exclusively and saves every
-original payload under `evidence/` with its SHA-256, a copy of the universe, and
-`global-map.manifest.json`. Exit code 2 means some payloads failed: the run is
+gateway, IbIvMonitor daily bars through `alice monitor`, and Bundesbank, Japan
+MOF and STOXX files from their official URLs. The default window is six years,
+enough for every current measure. It creates `research/market-assistant/runs/<runId>/`
+exclusively with a copy of the universe and `global-map.manifest.json`.
+
+Original payloads go to `research/market-assistant/global-map/cache/payloads/<sha256>.txt`,
+a temporary cache excluded from Workspace Git: identical payloads are stored
+once, and only those of the five latest runs and of Saturday runs from the last
+five weeks are kept. Older runs keep their metrics but can no longer be
+recalculated. This cache disappears when IbIvMonitor persists external series
+(request SUPERAI-EXTERNAL-SERIES-01); IbIvMonitor owns long-term persistence. Exit code 2 means some payloads failed: the run is
 still valid and the failures are listed; do not retry in a loop. It never opens
 an IBKR connection and never starts monitor history jobs.
 

@@ -32,8 +32,10 @@ const universe = JSON.parse(universeBytes.toString('utf8'))
 const payloadText = new Map()
 for (const p of manifest.payloads) {
   if (p.status !== 'ok') continue
-  const path = join(runDir, p.file)
-  if (!inside(runDir, await realpath(path))) throw new Error('Evidence escaped the run directory')
+  // Payloads live in the Workspace's temporary cache (content-addressed by SHA-256).
+  if (!/^research\/market-assistant\/global-map\/cache\/payloads\/[a-f0-9]{64}\.txt$/.test(p.file)) throw new Error(`Unexpected payload path: ${p.file}`)
+  const path = join(root, p.file)
+  if (!inside(root, await realpath(path).catch(() => { throw new Error(`Payload no longer cached: ${p.file}`) }))) throw new Error('Payload escaped the Workspace')
   const bytes = await readFile(path)
   if (createHash('sha256').update(bytes).digest('hex') !== p.sha256) throw new Error(`Evidence integrity mismatch: ${p.file}`)
   payloadText.set(p.key, { text: bytes.toString('utf8'), fetchedAt: p.fetchedAt })

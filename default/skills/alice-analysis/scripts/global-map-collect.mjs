@@ -1,18 +1,20 @@
 import { createHash } from 'node:crypto'
-import { copyFile, mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, readFile, realpath, unlink, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative } from 'node:path'
 import tls from 'node:tls'
 import { fileURLToPath } from 'node:url'
 
 // Bounded data collector for the global market map, not an Agent/model loop.
 // Saves every original payload with its SHA-256 before any calculation.
-const usage = 'Use: node global-map-collect.mjs [--start 2004-01-01] [--run-id <id>] [--universe <workspace path>]'
+const usage = 'Use: node global-map-collect.mjs [--start YYYY-MM-DD] [--run-id <id>] [--universe <workspace path>]'
 const args = process.argv.slice(2), options = {}
 for (let i = 0; i < args.length; i += 2) {
   if (!['--start', '--run-id', '--universe'].includes(args[i]) || args[i + 1] === undefined) throw new Error(usage)
   options[args[i]] = args[i + 1]
 }
-const start = options['--start'] ?? '2004-01-01'
+// Six years cover every current measure (5-year percentiles, 200-session means, 12-month changes).
+// Long history belongs to IbIvMonitor once it persists external series (SUPERAI-EXTERNAL-SERIES-01).
+const start = options['--start'] ?? `${new Date().getUTCFullYear() - 6}-01-01`
 if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) throw new Error('start must be YYYY-MM-DD')
 const runId = options['--run-id'] ?? `${new Date().toISOString().replace(/[-:]/g, '').slice(0, 13)}Z-global-map`
 if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/.test(runId)) throw new Error('Invalid run id')
@@ -42,7 +44,12 @@ const runDir = join(root, 'research/market-assistant/runs', runId)
 await mkdir(join(root, 'research/market-assistant/runs'), { recursive: true })
 await mkdir(runDir) // Exclusive: a run directory is never reused.
 if (!inside(await realpath(runDir))) throw new Error('Run directory escaped the Workspace')
-await mkdir(join(runDir, 'evidence'))
+// Temporary payload cache, excluded from Workspace Git, until the monitor owns persistence.
+const cacheRel = 'research/market-assistant/global-map/cache/payloads'
+const cacheDir = join(root, cacheRel)
+await mkdir(cacheDir, { recursive: true })
+if (!inside(await realpath(cacheDir))) throw new Error('Cache directory escaped the Workspace')
+await writeFile(join(root, 'research/market-assistant/global-map/cache/.gitignore'), '*\n')
 await copyFile(universePath, join(runDir, 'global-map.universe.json'))
 
 const headers = { 'content-type': 'application/json', ...(process.env.OPENALICE_PROJECT_ID ? { 'x-openalice-project': process.env.OPENALICE_PROJECT_ID } : {}) }
@@ -133,8 +140,9 @@ async function worker() {
       const bytes = Buffer.from(text, 'utf8')
       if (bytes.length > MAX_BYTES) throw new Error('Payload exceeds collector limit')
       const sha256 = createHash('sha256').update(bytes).digest('hex')
-      const file = `evidence/${req.key.replace(/[^A-Za-z0-9._-]+/g, '_')}.${sha256.slice(0, 12)}.txt`
-      await writeFile(join(runDir, file), bytes, { flag: 'wx' })
+      // Content-addressed: an unchanged payload is stored once across runs.
+      const file = `${cacheRel}/${sha256}.txt`
+      try { await writeFile(join(root, file), bytes, { flag: 'wx' }) } catch (error) { if (error.code !== 'EEXIST') throw error }
       fetched.set(req.key, { key: req.key, request: req.describe, fetchedAt, status: 'ok', file, sha256, bytes: bytes.length })
     } catch (error) {
       fetched.set(req.key, { key: req.key, request: req.describe, fetchedAt, status: 'error', error: String(error?.message ?? error).slice(0, 300) })
@@ -154,6 +162,32 @@ const manifest = {
   payloads: [...fetched.values()].sort((a, b) => (a.key < b.key ? -1 : 1)), series,
 }
 await writeFile(join(runDir, 'global-map.manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' })
+const pruned = await prunePayloads()
 const failed = manifest.payloads.filter(p => p.status !== 'ok')
-process.stdout.write(JSON.stringify({ runId, runDir: relative(root, runDir).replaceAll('\\', '/'), payloads: manifest.payloads.length, failed: failed.map(f => ({ key: f.key, error: f.error })) }, null, 2) + '\n')
+process.stdout.write(JSON.stringify({ runId, runDir: relative(root, runDir).replaceAll('\\', '/'), payloads: manifest.payloads.length, prunedPayloads: pruned, failed: failed.map(f => ({ key: f.key, error: f.error })) }, null, 2) + '\n')
 if (failed.length) process.exitCode = 2
+
+/**
+ * Keep payloads referenced by the five latest map runs and by Saturday runs of
+ * the last five weeks; older runs stay readable as metrics but lose their raw
+ * payloads. The monitor will own long-term persistence.
+ */
+async function prunePayloads() {
+  const runsDir = join(root, 'research/market-assistant/runs')
+  const runs = []
+  for (const name of await readdir(runsDir)) {
+    try {
+      const m = JSON.parse(await readFile(join(runsDir, name, 'global-map.manifest.json'), 'utf8'))
+      if (m.schema === 'superai.global-map.manifest/1' && m.collectedFrom) runs.push(m)
+    } catch { /* not a map run */ }
+  }
+  runs.sort((a, b) => (a.collectedFrom < b.collectedFrom ? 1 : -1))
+  const cutoff = Date.now() - 35 * 86_400_000
+  const keep = runs.filter((m, i) => i < 5 || (new Date(m.collectedFrom).getUTCDay() === 6 && Date.parse(m.collectedFrom) >= cutoff))
+  const referenced = new Set(keep.flatMap(m => m.payloads.filter(p => p.sha256).map(p => `${p.sha256}.txt`)))
+  let removed = 0
+  for (const name of await readdir(cacheDir)) {
+    if (/^[a-f0-9]{64}\.txt$/.test(name) && !referenced.has(name)) { await unlink(join(cacheDir, name)); removed++ }
+  }
+  return removed
+}
