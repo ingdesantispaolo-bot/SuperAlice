@@ -89,10 +89,13 @@ Shared-file changes and contract clarifications are announced there first.
   two identical helper publications). Stable episode identities preserve original
   confirmation/expiry/source references. Candidates are refused. Real native
   scheduled-control recording and legacy confirmation reconciliation remain.
-- [ ] X6 managed rollout: source bundle 1.0.10 and Chat 1.8.14 require context
-  before interpretation, candidate chat theses and explicit user attribution.
-  Ten existing harness/template assertions and app/test typechecks pass. Three
-  desk adoption and three Issue What updates are prepared; schedules/owner stay.
+- [x] X6 managed rollout: bundle 1.0.10+712473537e88a30d adopted in all
+  three desks and Chat 1.8.14 through its template transaction, zero conflicts.
+  Context before interpretation, candidate chat theses and explicit user
+  attribution are installed. Three Issue What updates committed in the private
+  desk as 0fa3db7; schedules/owner/timeout verified unchanged. Ten existing
+  harness/template assertions and app/test typechecks pass. Running backend
+  64c516a1 exposes context/2 and signal publication; native X5 proof follows.
 - [ ] X7 producer dependency: SUPERAI-EXTERNAL-SERIES-01 was forwarded verbatim
   to the monitor coordination file on G:, extending SUPERAI-MEMORY-READONLY-01.
   The owner has a historical archive study, but the requested external-series
