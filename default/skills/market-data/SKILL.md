@@ -14,6 +14,12 @@ Workspace shells already select their Alice Project. Outside a Workspace, use
 
 ## Find and read a series
 
+For IBKR research history, when IbIvMonitor is running, use its shared cache and
+instrument-track/history-request workflow from the `alice-analysis` Skill.
+Keep acquisition with the monitor rather than opening another research TWS
+client. `alice market` remains the chart/bar-provider interface; its returned
+barId names the actual source and does not imply monitor-cache ownership.
+
 ```bash
 alice market search-bars --query AAPL
 alice market bars --bar-id 'yfinance|AAPL' --interval 1d --count 300 --output bars.json
