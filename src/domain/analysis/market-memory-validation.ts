@@ -73,7 +73,9 @@ export function validateMemoryV2(events: MemoryEvent[], entry: MemoryEntry, orig
         if (!found) throw new Error(`Unknown measureKey for ${ref.assetId}/${condition.timeframe}: ${ref.measureKey}`)
         if (!found.completedBarsOnly) throw new Error('Thesis conditions require completed bars only')
         const series = memoryCatalogEntry(events, found.seriesId)
-        if (economicAssetId(events, found.seriesId) !== ref.assetId || series.role === 'asset' || series.unit !== found.unit) throw new Error('Measure series identity or unit differs from catalog')
+        if (economicAssetId(events, found.seriesId) !== ref.assetId || series.role === 'asset') throw new Error('Measure series identity differs from catalog')
+        const main = measures!.measures.find(m => m.assetId === condition.assetId && m.measureKey === condition.measureKey && m.timeframe === condition.timeframe)!
+        if (found.unit !== main.unit) throw new Error('Relative threshold measures require the same unit')
       }
     }
     if (entry.status !== 'active' && entry.activationBasis) throw new Error('activationBasis is only valid for active theses')

@@ -23,7 +23,7 @@ export const marketMemoryFactories: WorkspaceToolFactory[] = [
     name: 'market_memory_record',
     build: ctx => tool({
       description: 'Append a schema-v2 catalog/evidence/observation/thesis/reconciliation/check/signal/judgment/lesson event to this Workspace memory. Approvals belong exclusively to the user terminal. Chat writes candidate theses; activation needs a host scheduled review and a valid basis. --entry-json-file reads structured JSON. Existing snapshots remain immutable. The host stamps origin/recordedAt; imports never backdate knowledge. See alice-analysis references/market-memory.md. Research only, no trading authority.',
-      inputSchema: z.object({ entryJson: z.string().min(2).max(32000) }).strict(),
+      inputSchema: z.object({ entryJson: z.string().min(2).max(256000) }).strict(),
       execute: async ({ entryJson }) => {
         const entry = JSON.parse(entryJson)
         if (entry?.kind === 'approval') throw new Error('Approvals are available only in the user terminal, never through agent tools')

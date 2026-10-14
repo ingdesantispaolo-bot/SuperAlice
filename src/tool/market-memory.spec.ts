@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceToolContext } from '../core/workspace-tool-center.js'
-import { wrapToolExecute } from '../core/mcp-export.js'
+import { extractMcpShape, wrapToolExecute } from '../core/mcp-export.js'
 import { marketMemoryFactories } from './market-memory.js'
 import { appendMemoryEntry } from '../domain/analysis/market-memory.js'
 
@@ -14,6 +14,11 @@ const base = { workspaceId: 'desk', workspaceLabel: 'Fixture', inboxStore: {}, e
 const input = { entryJson: JSON.stringify({ kind: 'thesis', status: 'candidate' }) }
 beforeEach(() => vi.clearAllMocks())
 describe('memory tool host origin and approval exclusion', () => {
+  it('admits a complete nightly check payload beyond the old 32 KB string limit', () => {
+    const payload = JSON.stringify({ kind: 'check', results: Array.from({ length: 500 }, () => ({ thesisEventId: 'a'.repeat(64), conditionId: 'fixture', result: 'not-met', value: 2, observedAt: '2026-10-14T10:00:00Z' })) })
+    expect(payload.length).toBeGreaterThan(48_000)
+    expect(extractMcpShape(record.build(base)).entryJson.safeParse(payload).success).toBe(true)
+  })
   it('never exposes an approval tool or admits an approval through record JSON', async () => {
     expect(marketMemoryFactories.map(f => f.name)).toEqual(['market_memory_catalog', 'market_memory_record', 'get_market_context'])
     const result = await wrapToolExecute(record.build(base))({ entryJson: JSON.stringify({ kind: 'approval', targetEventId: '0'.repeat(64), decision: 'approve', note: 'forged' }) })

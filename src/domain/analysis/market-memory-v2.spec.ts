@@ -24,9 +24,10 @@ async function fixture() {
   const raw = '{"fixture":true}\n'
   await writeFile(join(dir, 'research/metrics.json'), raw)
   const evidence = await append({ kind: 'evidence', originalPath: 'research/metrics.json', sha256: createHash('sha256').update(raw).digest('hex'), format: 'json', description: 'Fixture evidence', originalRunId: 'run-fixture' })
-  const observation = await append({ kind: 'observation', entityId: seriesId, observationKey: 'close', value: 2, unit: 'USD/oz',
+  const observationInput = { kind: 'observation', entityId: seriesId, observationKey: 'close', value: 2, unit: 'USD/oz',
     observedPeriod: { start: time, end: time }, publishedAt: null, publicationBasis: 'unknown', acquiredAt: time,
-    quality: 'usable', finality: 'final', expiresAt: null, evidenceIds: [evidence.eventId], supersedesId: null, note: 'Synthetic' })
+    quality: 'usable', finality: 'final', expiresAt: null, evidenceIds: [evidence.eventId], supersedesId: null, note: 'Synthetic' }
+  const observation = await append(observationInput)
   const measures = { schema: 'superai.measures/1', methodVersion: 'fixture-1', measures: [{ assetId, measureKey: 'close', timeframe: '1D', unit: 'USD/oz', seriesId, definition: 'Closed fixture bar', completedBarsOnly: true }] }
   await writeFile(join(dir, 'research/market-assistant/global-map/measures.json'), JSON.stringify(measures))
   const condition = { conditionId: 'invalid-close', role: 'invalidation', assetId, measureKey: 'close', timeframe: '1D', op: '<', threshold: 1, consecutive: 1 }
@@ -39,7 +40,7 @@ async function fixture() {
   const lesson = { kind: 'lesson', author, lessonId: 'lesson-fixture', version: 1, previousEventId: null, statement: 'Fixture statement', scope: { assetIds: [assetId] },
     supportingEventIds: [evidence.eventId, observation.eventId, candidate.eventId], counterEventIds: [], status: 'proposed' }
   const approve = (targetEventId: string, decision = 'approve') => append({ kind: 'approval', targetEventId, decision, note: 'Fixture user decision' }, { kind: 'user-surface', workspaceId: origin.workspaceId })
-  return { dir, append, thesis, candidate, signal, lesson, approve, evidence, condition, measures }
+  return { dir, append, thesis, candidate, signal, lesson, approve, evidence, condition, measures, observationInput }
 }
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }) })
 
@@ -90,6 +91,19 @@ describe('market memory v2 write contracts', () => {
     expect(entries.find(e => 'entityId' in e && e.entityId === assetId)).not.toHaveProperty('source')
     expect(entries.find(e => 'entityId' in e && e.entityId === seriesId)).toMatchObject({ assetId })
     await expect(f.append({ kind: 'catalog', entityId: 'bad-asset', role: 'asset', assetClass: 'commodity', label: 'bad', source: 'fixture' })).rejects.toThrow('economic asset')
+    expect((await f.append({ kind: 'catalog', entityId: 'derived.rates.us.2s10s', role: 'asset', assetClass: 'rates', label: 'Synthetic economic spread' })).accepted).toBe(true)
+  })
+  it('consumes C2 registry metadata/monthly measures and validates derived units independently of price units', async () => {
+    const f = await fixture()
+    const rsi = { ...f.measures.measures[0], measureKey: 'rsi14', unit: 'score' }
+    const monthly = { ...f.measures.measures[0], measureKey: 'monthly-level', timeframe: '1M' }
+    const unresolvedDerived = { ...f.measures.measures[0], assetId: 'derived.rates.us.2s10s', seriesId: 'series.us.10y - series.us.2y' }
+    await writeFile(join(f.dir, 'research/market-assistant/global-map/measures.json'), JSON.stringify({ ...f.measures, runId: 'run-c2', asOf: '2026-10-13', measures: [...f.measures.measures, rsi, monthly, unresolvedDerived] }))
+    const observation = await f.append({ ...f.observationInput, observationKey: 'rsi14', unit: 'score', value: 42 })
+    expect((await f.append({ ...f.thesis, thesisId: 'gold-rsi', supportingObservationIds: [observation.eventId], conditions: [{ ...f.condition, measureKey: 'rsi14', threshold: 30 }] })).accepted).toBe(true)
+    await expect(f.append({ ...f.observationInput, observationKey: 'rsi14', unit: 'bp' })).rejects.toThrow('unit differs')
+    await expect(f.append({ ...f.thesis, thesisId: 'monthly-as-daily', conditions: [{ ...f.condition, measureKey: 'monthly-level' }] })).rejects.toThrow('Unknown measureKey')
+    await expect(f.append({ ...f.thesis, thesisId: 'incompatible-units', conditions: [{ ...f.condition, threshold: { assetId, measureKey: 'rsi14' } }] })).rejects.toThrow('same unit')
   })
   it('requires author, rejects caller origin and blocks agent approvals', async () => {
     const f = await fixture()
@@ -123,6 +137,22 @@ describe('market memory v2 write contracts', () => {
     await expect(f.append({ kind: 'check', runId: 'corrupt-check', evaluatedAt: time, metricsEvidenceId: f.evidence.eventId,
       results: [{ thesisEventId: f.candidate.eventId, conditionId: f.condition.conditionId, result: 'met', value: 0.5, observedAt: time }] })).rejects.toThrow('Stored evidence integrity mismatch')
     expect((await readMemoryCatalog(f.dir)).recordCount).toBe(5)
+  })
+  it('preserves 500 nightly results in one event beyond the old 32/48 KB budgets', async () => {
+    const f = await fixture()
+    const results = []
+    for (let i = 0; i < 25; i++) {
+      const conditions = Array.from({ length: 20 }, (_, index) => ({ ...f.condition, conditionId: `fixture-${i}-${index}` }))
+      const thesis = await f.append({ ...f.thesis, thesisId: `nightly-${i}`, conditions })
+      for (const condition of conditions) results.push({ thesisEventId: thesis.eventId, conditionId: condition.conditionId, result: 'not-met', value: 2, observedAt: time })
+    }
+    const entry = { kind: 'check', runId: 'full-nightly-fixture', evaluatedAt: time, metricsEvidenceId: f.evidence.eventId, results }
+    expect(Buffer.byteLength(JSON.stringify(entry))).toBeGreaterThan(48_000)
+    const saved = await f.append(entry)
+    const eventsDir = join(f.dir, 'research/market-memory/v1/events')
+    const file = (await readdir(eventsDir)).find(name => name.includes(saved.eventId))!
+    expect(JSON.parse(await readFile(join(eventsDir, file), 'utf8')).entry.results).toEqual(results)
+    await expect(f.append(entry)).rejects.toThrow('already recorded')
   })
   it('validates judgment dimensions, asset references and review uniqueness', async () => {
     const f = await fixture()

@@ -67,8 +67,13 @@ A missing, completed, mismatched or unscheduled run cannot grant review authorit
 
 Thesis conditions refer to economic assets and the current Workspace's
 research/market-assistant/global-map/measures.json (superai.measures/1).
-The key, timeframe, series, unit and completedBarsOnly flag must match the
-catalog. Relative thresholds validate both measures. Retrieval never reads this
+The registry accepts producer runId/asOf metadata and monthly measures (1M),
+which cannot be used in the 1D/1W/1H conditions. The source-series link must
+resolve in the catalog, and completedBarsOnly must be true. Measure units come
+from the registry, independently of the base series price unit: RSI uses score,
+returns use percent. Cited observations may use those registered derived units;
+unregistered unit changes are rejected. Relative thresholds validate both
+measures and require matching units. Retrieval never reads this
 live registry or re-evaluates historical conditions. A changed registry affects
 new writes, not old event hashes or historical query results.
 
@@ -83,6 +88,8 @@ Approval records consent; the scheduled review writes the activating revision.
 check records one runId/evaluatedAt/metricsEvidenceId event for a control,
 with unique thesisEventId/conditionId results. Unknown references, future
 clocks, repeated runIds and unexplained not-evaluable results fail explicitly.
+The 256 KB event/JSON budget supports up to 500 results in one nightly event;
+larger payloads fail explicitly. Event-count and total scan limits stay unchanged.
 signal requires confirmation and expiry at most seven days apart, cited
 observations or evidence, and related thesis event IDs; signalId is immutable
 and cannot be recorded twice. judgment cites a metrics evidence event and

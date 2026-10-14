@@ -3,7 +3,7 @@ import { lstat, mkdir, open, readFile, readdir, realpath, rename, unlink, writeF
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { z } from 'zod'
 import { memoryEntrySchema, memoryEventSchema as eventSchema, memoryMeasuresSchema, memoryOriginSchema, type MemoryEntry, type MemoryEvent, type MemoryOrigin } from './market-memory-schema.js'
-import { economicAssetId, validateMemoryV2 } from './market-memory-validation.js'
+import { economicAssetId, memoryCatalogEntry, validateMemoryV2 } from './market-memory-validation.js'
 export { memoryEntrySchema } from './market-memory-schema.js'
 export type { MemoryEntry, MemoryEvent, MemoryOrigin } from './market-memory-schema.js'
 
@@ -19,7 +19,7 @@ export const memoryContextSchema = z.object({
 export type MemoryContextQuery = z.input<typeof memoryContextSchema>
 const namespace = 'research/market-memory/v1'
 const archiveAttributes = 'events/** -text\nevidence/** -text\n'
-const MAX_EVENTS = 10_000, MAX_EVENT_BYTES = 48_000, MAX_LOG_BYTES = 64_000_000, MAX_EVIDENCE_BYTES = 4_000_000
+const MAX_EVENTS = 10_000, MAX_EVENT_BYTES = 256_000, MAX_LOG_BYTES = 64_000_000, MAX_EVIDENCE_BYTES = 4_000_000
 const digest = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex')
 const ms = (value: string) => Date.parse(value)
 const isMissing = (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT'
@@ -101,7 +101,7 @@ function requireKind(events: MemoryEvent[], eventId: string, kind: MemoryEntry['
   if (!event || event.entry.kind !== kind) throw new Error(`Missing ${kind} reference`)
   return event
 }
-function validateEntry(events: MemoryEvent[], entry: MemoryEntry, recordedAt: string) {
+function validateEntry(events: MemoryEvent[], entry: MemoryEntry, recordedAt: string, measures?: z.infer<typeof memoryMeasuresSchema>) {
   const catalog = (entityId: string) => {
     const event = events.find(e => e.entry.kind === 'catalog' && e.entry.entityId === entityId)
     if (!event || event.entry.kind !== 'catalog') throw new Error(`Unknown catalog entity: ${entityId}`)
@@ -111,7 +111,9 @@ function validateEntry(events: MemoryEvent[], entry: MemoryEntry, recordedAt: st
     throw new Error('Catalog identity is immutable; reuse it or give a changed source/method a distinct entityId')
   }
   if (entry.kind === 'observation') {
-    if (catalog(entry.entityId).unit !== entry.unit) throw new Error('Observation unit differs from catalog')
+    const registeredMeasure = measures?.measures.find(m => m.seriesId === entry.entityId && m.assetId === economicAssetId(events, entry.entityId)
+      && m.measureKey === entry.observationKey && m.unit === entry.unit)
+    if (catalog(entry.entityId).unit !== entry.unit && !registeredMeasure) throw new Error('Observation unit differs from catalog and no registered measure defines it')
     if (catalog(entry.entityId).availability === 'pending') throw new Error('Pending catalog identity must be verified before measurements are recorded')
     if (ms(entry.observedPeriod.start) > ms(entry.observedPeriod.end)
       || ms(entry.acquiredAt) > ms(recordedAt)
@@ -178,17 +180,20 @@ export async function appendMemoryEntry(workspace: string, entryInput: unknown, 
     const events = await readEvents(root)
     if (events.length >= MAX_EVENTS) throw new Error('Memory event limit reached')
     const recordedAt = new Date(Math.max(now.getTime(), events.length ? ms(events.at(-1)!.recordedAt) + 1 : 0)).toISOString()
-    validateEntry(events, entry, recordedAt)
     let measures: z.infer<typeof memoryMeasuresSchema> | undefined
-    if (entry.kind === 'thesis' && entry.conditions.length) {
+    const needsMeasures = entry.kind === 'thesis' && entry.conditions.length
+      || entry.kind === 'observation' && memoryCatalogEntry(events, entry.entityId).unit !== entry.unit
+    if (needsMeasures) {
       const workspaceRoot = await realpath(workspace)
       try {
         measures = memoryMeasuresSchema.parse(JSON.parse((await checkedRead(workspaceRoot, join(workspaceRoot, 'research/market-assistant/global-map/measures.json'), MAX_EVIDENCE_BYTES)).toString('utf8')))
       } catch (error) {
-        if (isMissing(error)) throw new Error('Measures registry unavailable: research/market-assistant/global-map/measures.json')
-        throw error
+        if (isMissing(error)) {
+          if (entry.kind === 'thesis') throw new Error('Measures registry unavailable: research/market-assistant/global-map/measures.json')
+        } else throw error
       }
     }
+    validateEntry(events, entry, recordedAt, measures)
     validateMemoryV2(events, entry, origin, recordedAt, measures, authority.scheduledReviewIssueId)
     let persisted: unknown = entry
     if (entry.kind === 'evidence') {

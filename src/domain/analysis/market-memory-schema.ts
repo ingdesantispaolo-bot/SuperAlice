@@ -126,8 +126,9 @@ export const memoryEventSchema = z.discriminatedUnion('schemaVersion', [eventV1,
 export type MemoryEvent = z.infer<typeof memoryEventSchema> & { eventId: string }
 export const memoryMeasuresSchema = z.object({
   schema: z.literal('superai.measures/1'), methodVersion: z.string().min(1).max(80),
+  runId: id.optional(), asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   measures: z.array(z.object({
-    assetId: id, measureKey: id, timeframe: z.enum(['1D', '1W', '1H']), unit: z.string().min(1).max(100), seriesId: id,
+    assetId: id, measureKey: id, timeframe: z.enum(['1D', '1W', '1H', '1M']), unit: z.string().min(1).max(100), seriesId: z.string().min(1).max(500),
     definition: text, completedBarsOnly: z.boolean(),
   }).strict()).min(1).max(5000),
 }).strict().refine(value => new Set(value.measures.map(m => `${m.assetId}|${m.measureKey}|${m.timeframe}`)).size === value.measures.length,
