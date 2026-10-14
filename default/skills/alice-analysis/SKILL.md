@@ -20,6 +20,13 @@ portfolio evaluation. It defines evidence, comparisons, persistent research
 state and meaningful notifications. Prefer the user's existing local profile;
 the example profile supplies explicit research defaults, not personal targets.
 
+## Global market map
+
+Read [the global-map procedure](references/global-map.md) before collecting or
+reading the 50-asset map. Its scripts collect original payloads with hashes,
+compute repeatable measures offline and register map assets and series in
+market memory; report numbers come from their generated files, never by hand.
+
 ## IbIvMonitor research sources
 
 For preserved evidence, temporal thesis revisions and offline context, read
