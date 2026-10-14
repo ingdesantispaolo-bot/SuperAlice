@@ -8,8 +8,13 @@ the self-scheduling Skill. Native Agent runtimes still own analysis and reasonin
 
 ## Read the desk before reading the market
 
-Consult the owning desk's `alice memory catalog/context` when it has accepted
-entries (see market-memory.md), alongside the existing run/latest evidence.
+Before forming a market interpretation, consult the owning desk's
+`alice memory catalog/context` (see market-memory.md), alongside run/latest
+evidence. Resolve economic assets and relevant horizons; inspect recorded check
+outcomes, unexpired signals, applicable approved lessons and latest asset/group
+judgments. Supply setupType/regime only when established. If the archive is empty
+or an identity is unknown, state that coverage gap and establish it from evidence.
+Never infer that the market has no events.
 Keep imported interpretations dated and separate by horizon; retrieval does
 not re-evaluate them. Check stale/superseded/partial evidence and knownAsOf
 coverage before applying a cached thesis to a current question. Preserve the
@@ -169,6 +174,49 @@ news watermark. Each finding records stable `key` (kind/instrument/horizon/metho
 `lastSeenAt`, supporting evidence, material measurements, confirmation count,
 severity, invalidation and last notified status/time. Keep subjective judgments
 distinct from measured fields. A new method starts a new comparison baseline.
+
+### Every confirmed signal belongs in memory
+
+For every confirmed finding in intraday or swing, preserve an immutable signal
+draft and record it before accepting the new state/report. Notification cooldown
+does not suppress memory recording. Candidates, missing quotes and unresolved
+coverage gaps cannot become confirmed economic signals. Keep data-quality findings
+separate from market reversals and upcoming events separate from released results.
+If a finding spans intraday/swing, record one episode per horizon. Use economic
+asset IDs and exact related thesis event IDs from context; an empty
+relatedThesisIds means no relevant thesis was recorded. Register original source
+evidence first and cite its returned memory event IDs.
+
+Read [market-memory.md](market-memory.md#confirmed-signal-publication) for the
+draft/helper protocol. Persist confirmedAt, expiresAt, signalId, entryPath and
+eventId in the finding's memory fields. confirmedAt is the original documented
+confirmation, not this control's lastSeenAt or HTTP response time. expiresAt is
+explicit, suitable to the horizon and at most seven days after confirmation.
+Intraday episodes normally end within the relevant session/event window, selected
+from the session calendar. Swing episodes need an explicit review/expiry.
+Repeating a finding retains its immutable draft and event reference; do not
+extend expiry or change sourceRunId on every control. A resolution/new confirmation
+or changed method is a new episode with a new documented confirmation timestamp.
+
+For legacy confirmed findings, locate the earliest preserved accepted state/report
+documenting confirmation and its original evidence. Record historical attribution
+with that confirmation and a past expiry when appropriate; never resurrect it as
+current. If the original time, asset scope or evidence is unavailable, retain an
+explicit memory coverage gap until reconciled. Do not substitute firstSeenAt for
+an unknown confirmation time. Expired signals are history, not current alerts.
+
+The helper publishes deterministically; it does not analyze or schedule:
+
+```bash
+node .agents/skills/alice-analysis/scripts/market-memory-signal.mjs --draft research/market-assistant/runs/<run>/signals/<episode>.json --record
+```
+
+Save eventId only after accepted: true. Retry an identical draft after a crash;
+deduplicateSignal preserves the existing event and expiry. Different content under
+the same identity is an error. Failed recording stays pending and must be retried
+or reported as incomplete memory coverage; never silently advance its receipt.
+Commit only this control's drafts, memory events/evidence, state and report.
+The derived SQLite index stays excluded.
 
 Write an immutable run directory first. Advance `latest.json` atomically only
 to a valid completed run; its pointer contains runId, state/report paths and

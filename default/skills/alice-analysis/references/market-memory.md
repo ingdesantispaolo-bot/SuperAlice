@@ -166,6 +166,36 @@ invoke alice memory approve, or clear their Session identity to imitate the
 user. market_memory_record rejects approvals. The shared Windows user means
 this is a behavior rule, not process isolation; see docs/market-memory.md.
 
+## Confirmed signal publication
+
+Preserve a draft below the immutable run directory. Its wrapper is
+{schema: "superai.confirmed-signal-draft/1", status: "confirmed", findingKey,
+methodRevision, entry: <signal JSON without signalId>}. entry includes author,
+assetIds, one horizon, signalType, summary, confirmedAt, expiresAt, sourceRunId,
+relatedThesisIds and observationIds/evidenceIds as above. References are memory
+event hashes, not source filenames. The host validates the complete entry;
+the helper does not confirm a finding or collect data.
+
+`market-memory-signal.mjs --draft research/<path>.json` prints the stable entry.
+Add --record to publish from an injected Workspace shell. It preserves Session/run
+headers and fails if the backend has not loaded the new contract. The identity
+hashes findingKey, horizon, original confirmation instant and methodRevision.
+Keep the original draft across controls, including sourceRunId, references,
+confirmation and expiry. The helper uses the equivalent of
+`alice memory record --entry-json-file <entry.json> --deduplicate-signal true`.
+Only an exactly identical payload is reusable. Changed content under the same
+signalId is rejected; ordinary record stays strict about duplicates. An
+idempotent retry verifies referenced evidence and returns alreadyRecorded: true
+with the original eventId/recordedAt, creating no additional event.
+
+Chat writes candidate theses. Attribute an explicitly stated user opinion with
+author.type: user and status: candidate; retain the original wording in evidence
+and separate it from your summary. Ask about genuine ambiguity. Never infer user
+approval from a conversation, an instruction to analyze or an assistant paraphrase.
+User proposals and monitor-analyst interpretations are attributed inputs,
+not automatically active policy. Read context before applying them and use
+the user approval/scheduled-review process for activation.
+
 ## Context v2
 
 get_market_context returns superai.market-context/2. Ask for economic asset IDs;

@@ -45,6 +45,17 @@ async function fixture() {
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }) })
 
 describe('market memory v2 write contracts', () => {
+  it('retries an identical confirmed signal idempotently without resetting expiry or accepting changed content', async () => {
+    const f = await fixture(), first = await f.append(f.signal)
+    const count = (await readMemoryCatalog(f.dir)).recordCount
+    const retry = (input: unknown) => appendMemoryEntry(f.dir, input, origin, new Date(Date.parse(time) + 90_000), { deduplicateSignal: true })
+    expect(await retry(f.signal)).toMatchObject({ accepted: true, alreadyRecorded: true, eventId: first.eventId, recordedAt: first.recordedAt })
+    expect((await readMemoryCatalog(f.dir)).recordCount).toBe(count)
+    await expect(retry({ ...f.signal, expiresAt: '2026-10-16T10:00:00Z' })).rejects.toThrow('different content')
+    await expect(retry(f.thesis)).rejects.toThrow('only to confirmed signal')
+    await writeFile(join(f.dir, `research/market-memory/v1/evidence/${createHash('sha256').update('{"fixture":true}\n').digest('hex')}.json`), '{}')
+    await expect(retry(f.signal)).rejects.toThrow('integrity mismatch')
+  })
   it('rejects chat activation and accepts a matching host scheduled review', async () => {
     const f = await fixture()
     const active = { ...f.thesis, status: 'active', version: 2, previousEventId: f.candidate.eventId, activationBasis: { type: 'scheduled-review', issueId: 'saturday-review' } }

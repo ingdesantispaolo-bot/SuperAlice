@@ -78,6 +78,24 @@ describe('scoped market memory through real CLI and filesystem', () => {
       expect(denied.status).toBe(403)
       const currentManifest = await (await app.request('/cli/ws1/data/manifest')).json()
       expect(JSON.stringify(currentManifest.groups.memory)).not.toContain('recover-lock')
+      await mkdir(join(dir, 'ws1/research'), { recursive: true })
+      const signalRaw = '{"fixture":"signal-source"}'
+      await writeFile(join(dir, 'ws1/research/signal-source.json'), signalRaw)
+      const source = JSON.parse((await run(['memory', 'record', '--entry-json', JSON.stringify({ kind: 'evidence', originalPath: 'research/signal-source.json',
+        sha256: createHash('sha256').update(signalRaw).digest('hex'), format: 'json', description: 'Synthetic confirmed-signal source', originalRunId: 'fixture-check' })])).stdout)
+      const confirmedAt = new Date(Date.now() - 1000).toISOString()
+      const draft = { schema: 'superai.confirmed-signal-draft/1', status: 'confirmed', findingKey: 'fixture:rates', methodRevision: 'fixture-1',
+        entry: { kind: 'signal', author: { type: 'superai', agent: 'codex' }, assetIds: ['asset.rates.it.10y'], horizon: 'intraday', signalType: 'fixture',
+          summary: 'Synthetic confirmed signal', confirmedAt, expiresAt: new Date(Date.parse(confirmedAt) + 3600_000).toISOString(), sourceRunId: 'fixture-check', relatedThesisIds: [], evidenceIds: [source.eventId] } }
+      await writeFile(join(dir, 'ws1/research/signal-draft.json'), JSON.stringify(draft))
+      const publish = () => promisify(execFile)(process.execPath, [resolve('default/skills/alice-analysis/scripts/market-memory-signal.mjs'), '--draft', 'research/signal-draft.json', '--record'], {
+        cwd: join(dir, 'ws1'), env: { ...process.env, AQ_WS_ID: 'ws1', AQ_RUN_ID: '', AQ_SESSION_ID: '', OPENALICE_PROJECT_ID: '', OPENALICE_TOOL_URL: `http://127.0.0.1:${port}/cli` }, timeout: 10_000 })
+      const firstSignal = JSON.parse((await publish()).stdout), repeatedSignal = JSON.parse((await publish()).stdout)
+      expect(firstSignal).toMatchObject({ accepted: true })
+      expect(repeatedSignal).toMatchObject({ accepted: true, alreadyRecorded: true, eventId: firstSignal.eventId, recordedAt: firstSignal.recordedAt })
+      const signalContext = JSON.parse((await run(['memory', 'context', '--entity-ids', '["asset.rates.it.10y"]'])).stdout)
+      expect(signalContext.signals).toHaveLength(1)
+      expect(signalContext.signals[0]).toMatchObject({ confirmedAt, expiresAt: draft.entry.expiresAt })
       expect(context.catalog.find((entry: { entityId: string }) => entry.entityId === 'italy.fitted.10y')).toMatchObject({ role: 'estimated-curve', benchmarkEquivalence: 'not-established' })
       expect(context.reevaluation).toMatchObject({ monitorContacted: false, performed: false, requiresNewEvidence: true })
       expect(JSON.parse((await run(['memory', 'catalog'], 'ws2')).stdout).entries).toEqual([])

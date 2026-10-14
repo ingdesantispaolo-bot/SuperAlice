@@ -96,6 +96,18 @@ observations or evidence, and related thesis event IDs; signalId is immutable
 and cannot be recorded twice. judgment cites a metrics evidence event and
 relevant observations; its reviewRunId/assetId/horizon combination is unique.
 
+The opt-in record deduplicateSignal flag returns the original signal event only
+when the full normalized entry is identical, including author, source run,
+references, confirmation and expiry. It verifies the cited evidence again;
+changed content under an existing identity still fails. Ordinary record remains
+strict. The bundled market-memory-signal.mjs accepts an explicitly confirmed
+immutable draft, derives a stable episode ID from findingKey/horizon/confirmation
+instant/methodRevision and publishes with that flag and injected Session/run
+headers. It neither confirms findings nor creates an agent/model loop. Repeated
+controls retain the original draft and event reference; new confirmations are
+new episodes. The market-assistant procedure owns publication before state
+acceptance, independently of notification cooldown and with explicit legacy gaps.
+
 lesson requires at least three distinct supporting event IDs, distinct counter
 examples and versioned previousEventId. Approved/retired revisions require the
 latest user approval of the exact preceding proposed/approved version, preserving

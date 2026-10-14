@@ -23,8 +23,8 @@ export const marketMemoryFactories: WorkspaceToolFactory[] = [
     name: 'market_memory_record',
     build: ctx => tool({
       description: 'Append a schema-v2 catalog/evidence/observation/thesis/reconciliation/check/signal/judgment/lesson event to this Workspace memory. Approvals belong exclusively to the user terminal. Chat writes candidate theses; activation needs a host scheduled review and a valid basis. --entry-json-file reads structured JSON. Existing snapshots remain immutable. The host stamps origin/recordedAt; imports never backdate knowledge. See alice-analysis references/market-memory.md. Research only, no trading authority.',
-      inputSchema: z.object({ entryJson: z.string().min(2).max(256000) }).strict(),
-      execute: async ({ entryJson }) => {
+      inputSchema: z.object({ entryJson: z.string().min(2).max(256000), deduplicateSignal: z.boolean().optional().describe('For signals only: return the existing event for an exactly identical payload, preserving original confirmation/expiry. Different content remains an error.') }).strict(),
+      execute: async ({ entryJson, deduplicateSignal }) => {
         const entry = JSON.parse(entryJson)
         if (entry?.kind === 'approval') throw new Error('Approvals are available only in the user terminal, never through agent tools')
         const trigger = ctx.callerRun?.trigger
@@ -36,7 +36,7 @@ export const marketMemoryFactories: WorkspaceToolFactory[] = [
         const detail = issue ? await ctx.board?.detail(ctx.workspaceId, issue.issueId) : undefined
         const scheduledReviewIssueId = detail?.issue.id === issue?.issueId && detail?.issue.when
           && !['done', 'canceled'].includes(detail.issue.status) ? issue?.issueId : undefined
-        return appendMemoryEntry(workspace(ctx), entry, origin, undefined, { scheduledReviewIssueId })
+        return appendMemoryEntry(workspace(ctx), entry, origin, undefined, { scheduledReviewIssueId, ...(deduplicateSignal ? { deduplicateSignal: true } : {}) })
       },
     }),
   },

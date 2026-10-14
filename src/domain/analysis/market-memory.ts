@@ -144,13 +144,27 @@ async function verifyEvidence(root: string, event: MemoryEvent) {
 }
 
 /** Append-only writes under one exclusive lock, no backdating API. */
-export async function appendMemoryEntry(workspace: string, entryInput: unknown, hostOrigin: MemoryOrigin, now = new Date(), authority: { scheduledReviewIssueId?: string } = {}) {
+export async function appendMemoryEntry(workspace: string, entryInput: unknown, hostOrigin: MemoryOrigin, now = new Date(), authority: { scheduledReviewIssueId?: string; deduplicateSignal?: boolean } = {}) {
   const origin = memoryOriginSchema.parse(hostOrigin)
   const entry = memoryEntrySchema.parse(entryInput)
   const root = (await memoryRoot(workspace, true))!
   const lock = await acquireMemoryLock(root, 'writer'), owner = lock.owner
   try {
     const events = await readEvents(root)
+    if (authority.deduplicateSignal) {
+      if (entry.kind !== 'signal') throw new Error('deduplicateSignal applies only to confirmed signal entries')
+      const prior = events.find(e => e.entry.kind === 'signal' && e.entry.signalId === entry.signalId)
+      if (prior) {
+        if (JSON.stringify(prior.entry) !== JSON.stringify(entry)) throw new Error('Signal identity exists with different content; preserve its original confirmation or use a new episode identity')
+        const refs = new Set(entry.evidenceIds ?? [])
+        for (const ref of entry.observationIds ?? []) {
+          const observation = requireKind(events, ref, 'observation').entry
+          if (observation.kind === 'observation') for (const evidence of observation.evidenceIds) refs.add(evidence)
+        }
+        for (const ref of refs) await verifyEvidence(root, requireKind(events, ref, 'evidence'))
+        return { accepted: true, alreadyRecorded: true, eventId: prior.eventId, sequence: prior.sequence, recordedAt: prior.recordedAt }
+      }
+    }
     if (events.length >= MAX_EVENTS) throw new Error('Memory event limit reached')
     const recordedAt = new Date(Math.max(now.getTime(), events.length ? ms(events.at(-1)!.recordedAt) + 1 : 0)).toISOString()
     let measures: z.infer<typeof memoryMeasuresSchema> | undefined
