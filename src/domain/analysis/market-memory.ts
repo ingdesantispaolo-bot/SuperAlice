@@ -1,17 +1,19 @@
-import { createHash, randomUUID } from 'node:crypto'
-import { lstat, mkdir, open, readFile, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { lstat, mkdir, open, readFile, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { z } from 'zod'
 import { memoryEntrySchema, memoryEventSchema as eventSchema, memoryMeasuresSchema, memoryOriginSchema, type MemoryEntry, type MemoryEvent, type MemoryOrigin } from './market-memory-schema.js'
 import { economicAssetId, memoryCatalogEntry, validateMemoryV2 } from './market-memory-validation.js'
 import { memoryContextSchema, selectMarketContext, type MemoryContextQuery } from './market-memory-context.js'
+import { withMemoryIndex, indexedEvents, indexedContextEvents } from './market-memory-index.js'
+import { acquireMemoryLock, recoverMemoryLock } from './market-memory-lock.js'
 export { memoryEntrySchema } from './market-memory-schema.js'
 export type { MemoryEntry, MemoryEvent, MemoryOrigin } from './market-memory-schema.js'
 export { memoryContextSchema } from './market-memory-context.js'
 export type { MemoryContextQuery } from './market-memory-context.js'
 const namespace = 'research/market-memory/v1'
 const archiveAttributes = 'events/** -text\nevidence/** -text\n'
-const MAX_EVENTS = 10_000, MAX_EVENT_BYTES = 256_000, MAX_LOG_BYTES = 64_000_000, MAX_EVIDENCE_BYTES = 4_000_000
+const MAX_EVENTS = 100_000, MAX_EVENT_BYTES = 256_000, MAX_EVIDENCE_BYTES = 4_000_000
 const digest = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex')
 const ms = (value: string) => Date.parse(value)
 const isMissing = (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT'
@@ -66,27 +68,8 @@ async function directory(root: string, name: string, create: boolean): Promise<s
   return path
 }
 async function readEvents(root: string): Promise<MemoryEvent[]> {
-  const dir = await directory(root, 'events', false)
-  if (!dir) return []
-  const names = (await readdir(dir)).filter(name => !name.startsWith('.')).sort()
-  if (names.length > MAX_EVENTS) throw new Error('Memory scan limit reached; build a reviewed index before extending coverage')
-  const events: MemoryEvent[] = []
-  let totalBytes = 0
-  for (const name of names) {
-    const match = /^(\d{8})-([a-f0-9]{64})\.json$/.exec(name)
-    if (!match) throw new Error('Invalid memory event filename')
-    const bytes = await checkedRead(root, join(dir, name), MAX_EVENT_BYTES)
-    totalBytes += bytes.length
-    if (totalBytes > MAX_LOG_BYTES) throw new Error('Memory byte scan limit reached')
-    if (digest(bytes) !== match[2]) throw new Error('Memory event integrity mismatch')
-    const event = eventSchema.parse(JSON.parse(bytes.toString('utf8')))
-    const previous = events.at(-1)
-    if (event.sequence !== events.length + 1 || event.sequence !== Number(match[1])
-      || event.previousHash !== (previous?.eventId ?? null)
-      || previous && ms(event.recordedAt) <= ms(previous.recordedAt)) throw new Error('Broken memory event chain')
-    events.push({ ...event, eventId: match[2] })
-  }
-  return events
+  await directory(root, 'events', true)
+  return withMemoryIndex(root, checkedRead, db => indexedEvents(db))
 }
 function requireKind(events: MemoryEvent[], eventId: string, kind: MemoryEntry['kind']): MemoryEvent {
   const event = events.find(e => e.eventId === eventId)
@@ -165,9 +148,7 @@ export async function appendMemoryEntry(workspace: string, entryInput: unknown, 
   const origin = memoryOriginSchema.parse(hostOrigin)
   const entry = memoryEntrySchema.parse(entryInput)
   const root = (await memoryRoot(workspace, true))!
-  const lockPath = join(root, '.writer.lock'), owner = randomUUID()
-  const lock = await open(lockPath, 'wx')
-  await lock.writeFile(JSON.stringify({ owner, pid: process.pid, at: now.toISOString() })); await lock.close()
+  const lock = await acquireMemoryLock(root, 'writer'), owner = lock.owner
   try {
     const events = await readEvents(root)
     if (events.length >= MAX_EVENTS) throw new Error('Memory event limit reached')
@@ -227,16 +208,15 @@ export async function appendMemoryEntry(workspace: string, entryInput: unknown, 
     } finally { await unlink(temp).catch(error => { if (!isMissing(error)) throw error }) }
     return { accepted: true, eventId, sequence: event.sequence, recordedAt }
   } finally {
-    const current = JSON.parse(await readFile(lockPath, 'utf8'))
-    if (current.owner !== owner) throw new Error('Memory lock owner changed')
-    await unlink(lockPath)
+    await lock.release()
   }
 }
 
 export async function readMemoryCatalog(workspace: string) {
   const root = await memoryRoot(workspace)
-  const events = root ? await readEvents(root) : []
-  return { status: events.length ? 'available' : 'empty', entries: events.filter(e => e.entry.kind === 'catalog').map(e => ({ eventId: e.eventId, ...e.entry, recordedAt: e.recordedAt })), recordCount: events.length }
+  if (!root) return { status: 'empty', entries: [], recordCount: 0 }
+  return withMemoryIndex(root, checkedRead, (db, verification) => ({ status: verification.sequence ? 'available' : 'empty',
+    entries: indexedEvents(db, "SELECT raw,hash FROM events WHERE kind='catalog' ORDER BY seq").map(e => ({ eventId: e.eventId, ...e.entry, recordedAt: e.recordedAt })), recordCount: verification.sequence }))
 }
 
 /** Read-only retrieval: neither the monitor nor any model participates. */
@@ -245,11 +225,21 @@ export async function getMarketContext(workspace: string, input: MemoryContextQu
   const at = query.knownAsOf ?? now.toISOString()
   if (ms(at) > now.getTime() || query.observedFrom && query.observedTo && ms(query.observedFrom) > ms(query.observedTo)) throw new Error('Invalid context time range')
   const root = await memoryRoot(workspace)
-  const all = root ? await readEvents(root) : []
-  const { evidenceEvents, output } = selectMarketContext(all, query, at)
+  const { evidenceEvents, output } = root
+    ? await withMemoryIndex(root, checkedRead, (db, verification) => selectMarketContext(indexedContextEvents(db, query, at), query, at, verification.firstRecordedAt))
+    : selectMarketContext([], query, at)
   const evidence = []
   for (const event of evidenceEvents) evidence.push(await verifyEvidence(root!, event))
   const packet = { ...output, evidence }
   if (JSON.stringify(packet).length > query.maxChars) throw new Error('Context output limit reached; narrow entities/horizon or raise the reviewed budget')
   return packet
+}
+
+/** Local operator maintenance, exposed separately from agent tools. */
+export async function manageMemoryIndex(workspace: string, operation: 'audit' | 'rebuild' | 'recover-lock', kind: 'writer' | 'index' | 'control' = 'writer') {
+  const root = await memoryRoot(workspace)
+  if (!root) return { available: false, reason: 'Memory archive absent' }
+  if (operation === 'recover-lock') return recoverMemoryLock(root, kind)
+  return withMemoryIndex(root, checkedRead, (_db, verification) => ({ available: true, operation, ...verification,
+    verificationScope: 'all-event-bytes', evidenceVerification: 'Selected context evidence is checked separately' }), operation)
 }

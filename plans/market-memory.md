@@ -77,8 +77,13 @@ Shared-file changes and contract clarifications are announced there first.
   group review member judgments. Recursive support/counter-example evidence is
   retained/verified; result/output overflow fails explicitly. Source verification:
   38 memory/domain/tool tests, three CLI/HTTP/Git tests, app/test typechecks. Receipts: ../../dev/evidence/market-memory/x3-context.json and x3-cli.json.
-- [ ] X4: derived SQLite index, incremental verification, dead-owner lock
-  recovery and 50,000-event load proof; keep the 10,000-event cap until then.
+- [x] X4: derived SQLite index, incremental checkpoints/anchor and ordered
+  filename inventory; full audit/rebuild and same-machine dead-PID recovery.
+  50,000-event context proof: 272/292/295 ms; rebuild about 29 s. Earlier
+  1.2-2.2 s failures are retained in local receipts; selective observation
+  projection/reference closure resolved them. Cap is now 100,000 events/512 MB.
+  Five index assertions pass, including corruption and reconstruction equality;
+  context/CLI regressions and app/test typechecks accompany the commit.
 - [ ] X5-X7: confirmed signal ingestion, managed guidance in all three desks,
   and the monitor owner's read-only external-series/thesis contract.
 
@@ -92,7 +97,8 @@ with identical bytes/context using the mixed reader and no monitor access.
 Direct synthetic compatibility with Claude's C2 measureCatalog passes.
 
 Every check stays one event (up to 500 results and 256 KB); larger payloads fail
-explicitly. The event-count and 64 MB scan caps remain. Derived C2 source
+explicitly. X4 subsequently replaces full scans with the derived index and raises the cap
+to 100,000 events/512 MB only after the load proof. Derived C2 source
 expressions need stable catalog series identifiers before being referenced by
 conditions; ordinary measures are not blocked by unused unresolved definitions.
 No Claude-owned sources or C# code were changed. No production approvals, thesis

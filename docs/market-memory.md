@@ -5,8 +5,9 @@ exact-byte evidence capture, temporal events and bounded get_market_context.
 Acquisition/export stays with [[docs/ibiv-monitor-context.md]]. Native CLIs
 own reasoning; the module calls no monitor, broker, provider or model.
 
-src/domain/analysis/market-memory.ts uses files under the owning Workspace's
-research/market-memory/v1. A future database is only a rebuildable index.
+src/domain/analysis/market-memory.ts owns immutable files under the Workspace's
+research/market-memory/v1. market-memory-index.ts derives a local SQLite index;
+the events and copied evidence remain the authoritative, portable archive.
 src/tool/market-memory.ts binds writes to the current Workspace and resolves
 read-only owner selection within the same Project registry. No arbitrary roots
 or Project-scope memory tools. JSON text supports CLI file-backed entry flags.
@@ -133,7 +134,51 @@ Selected evidence bytes are hash-verified, including check-only metric inputs.
 Interpretation/group result overflow and output overflow fail explicitly;
 ordinary observation truncation remains labeled in coverage.
 
-The 10,000-event cap remains; indexing and incremental verification are X4.
+## Derived index, verification and recovery
+
+index/market-memory.sqlite is local derived state, excluded by the namespace's
+.gitignore. It is never a second archive or a source collector. The current
+format is SQLite user_version 2; unknown formats require explicit rebuild.
+Node's built-in SQLite is required. Events remain limited to 256 KB each,
+evidence to 4 MB; indexed archives allow 100,000 events and 512 MB of event bytes.
+Context result/output budgets remain unchanged. A first index or full rebuild
+reads and verifies the entire event chain and can take longer than a normal query.
+
+Incremental operations compare the full ordered filename inventory, rehash the
+last verified sequence/hash anchor, verify every new event's original bytes,
+schema, sequence, previous hash and recording clock, then commit index rows and
+checkpoint together. SQLite selects bounded observations and immutable reference
+closures instead of decoding all observation bodies. Selected row bodies are
+hash-checked; copied evidence cited by the resulting packet is verified each time.
+The index does not contact the monitor or revise source vintages.
+
+Incremental verification trusts earlier verified events to remain immutable.
+It does not promise to detect every alteration of an older, unselected body.
+An explicit audit checks all event bytes again, SQLite structure and derived
+projections/references; rebuild regenerates only the disposable database from
+the original events. Index damage never licenses changing an archive hash.
+Evidence verification remains separate from event audit and is performed for
+each selected context. The shared local-user trust boundary also applies to
+the index; it is not a defense against a user deliberately altering local state.
+
+From the user terminal, outside an Agent Session:
+
+```bash
+openalice exec --project <key> alice memory index --workspace-id <desk> --operation audit
+openalice exec --project <key> alice memory index --workspace-id <desk> --operation rebuild
+openalice exec --project <key> alice memory index --workspace-id <desk> --operation recover-lock --lock writer
+```
+
+Maintenance is absent from agent tools/manifests and rejects Session/run identity
+carriers, like the approval surface. Writer/index ownership uses an exclusive
+lock with UUID, PID, machine and recording time. A short control directory
+serializes acquisition/recovery; recover-lock also accepts index or control.
+Recovery requires the same machine and an ESRCH liveness probe; live, inaccessible,
+malformed, foreign or unknown owners remain locked regardless of age. PID reuse
+therefore causes conservative refusal. Interrupted unknown recovery claims
+require operator inspection. Recovery removes only the selected lock, never
+an event, evidence or a live process. Normal same-process index operations queue;
+another process owning the index produces an explicit retryable lock error.
 
 ## User approval surface and isolation limit
 

@@ -47,7 +47,7 @@ export function recordedThesisState(thesis: MemoryEvent, check?: MemoryEvent) {
 }
 
 /** Pure selection. Evidence bytes are verified by the archive owner after selection. */
-export function selectMarketContext(all: MemoryEvent[], query: ParsedMemoryContextQuery, at: string, firstRecordedAt = all[0]?.recordedAt ?? null) {
+export function selectMarketContext(all: MemoryEvent[], query: ParsedMemoryContextQuery, at: string, firstRecordedAt: string | null = all[0]?.recordedAt ?? null) {
   const events = all.filter(e => ms(e.recordedAt) <= ms(at))
   const byId = new Map(events.map(e => [e.eventId, e]))
   const catalogById = new Map(events.flatMap(e => e.entry.kind === 'catalog' ? [[e.entry.entityId, e] as const] : []))
