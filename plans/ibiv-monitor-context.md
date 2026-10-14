@@ -66,3 +66,27 @@ Decisions: version-1 immutable JSON + SHA-256 manifests; one-minute file publish
 Evidence: `../evidence/ibiv-bridge/` in the surrounding SuperAi workspace; 1230 monitor tests including queued GEX refresh after Stop, 1174 UTA hermetic + 22 integration, 102 selected reader/CLI/budget assertions, final CLI check, cross-language receipt and real paper probe. Source hashes confirm all 26 applied monitor files and zero unrelated source changes since baseline. Original monitor build succeeds without warnings/errors.
 
 Completion requires honest local evidence and real-session coverage; mocks do not certify the broker subscription, economic usefulness or AI/operator isolation.
+
+2026-10-14 follow-up: Claude reported that the rebuilt producer advertises 24
+tools and the 20-name consumer refused discovery. The four GEX tools are now
+explicitly reviewed and admitted, including research acquisition that respects
+the producer's operator cap, controller windows and protected user/family
+monitors. Unknown, missing, duplicate and paginated catalogs still fail closed.
+Source commits f2af7fcf and 6b08e194 passed 14 focused assertions and app/test
+typechecks. Native Windows acceptance passed 37 checks, with isolated stores,
+closed TWS port 1 and no model calls/orders; receipt
+../../dev/evidence/ibiv-mcp/2026-10-14T19-28-21-468Z/result.json.
+
+Runtime 6b08e194 exposes 24 tools. Read-only live CLI checks verified original
+canonical hashes for status, GEX monitors/profile and BTP/Bund daily bars;
+receipt ../../dev/evidence/market-memory/mcp24-live-receipt.json. The SPX profile
+reports missing quality/sourceAt, so this proves transport and evidence delivery,
+not live GEX freshness. The manual monitor remained connected on PID 8140 and
+the research policy was unchanged. The next intraday turn was interrupted through
+the normal API to make a maintenance window after a successful run; its resulting
+cooldown was released and the terminal session restored. Native calendars remain
+unchanged. Bundle 1.0.11+fa101f7a0ffffdb6, including Claude's map fixes and C4,
+was adopted through the managed upgrade API in all three desks, with no conflicts
+and 59 aligned files each. Receipt mcp24-managed-adoption.json accompanies the
+live receipt. C6 calendar ownership was handed to Claude in SuperAI coordination,
+preserving the existing memory requirements and avoiding duplicate schedules.

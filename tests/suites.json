@@ -121,7 +121,7 @@
     "lane": "system",
     "areas": ["market-data"],
     "commands": ["ibiv-monitor-mcp"],
-    "scope": "Actual Windows WPF, SDK stdio relay, 20 tools and Project CLI under the same user with isolated databases and closed port 1. No live TWS, economic or trading acceptance."
+    "scope": "Actual Windows WPF, SDK stdio relay, 24 tools and Project CLI under the same user with isolated databases and closed port 1, including bounded GEX acquisition. No live TWS, economic or trading acceptance."
   },
   {
     "id": "ibiv-monitor-background",
