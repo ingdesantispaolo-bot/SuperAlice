@@ -165,6 +165,12 @@ async function invoke(base, tool, args) {
     headers,
     body: JSON.stringify({ tool, args }),
   })
+  // Keep the monitor's canonical text and hash together, including tool errors
+  // and --output file delivery. The hash refers to content[0].text, not stdout.
+  if (r.body && r.body._meta && r.body._meta['ibivmonitor/sha256']) {
+    if (!r.ok || r.body.isError) process.exitCode = 1
+    return JSON.stringify(r.body)
+  }
   if (!r.ok) {
     let msg = r.body && r.body.error ? r.body.error : `HTTP ${r.status}`
     if (typeof msg !== 'string') msg = JSON.stringify(msg)

@@ -21,6 +21,8 @@ export type McpContent =
 export type McpToolResult = {
   content: McpContent[]
   isError?: boolean
+  _meta?: Record<string, unknown>
+  structuredContent?: Record<string, unknown>
 }
 
 // ==================== Result conversion ====================
@@ -82,13 +84,9 @@ function coerceIfNumber(schema: z.ZodType): z.ZodType {
     return coerced
   }
 
-  // z.number().optional()
-  if (def.type === 'optional' && def.innerType?._zod?.def?.type === 'number' && !def.innerType._zod.def.coerce) {
-    let coerced: any = z.coerce.number()
-    const innerChecks = def.innerType._zod.def.checks
-    if (innerChecks?.length > 0) coerced = coerced.with(...innerChecks)
-    return coerced.optional()
-  }
+  // Imported MCP JSON schemas may wrap numeric fields in defaults and optional.
+  if (def.type === 'optional') return coerceIfNumber(def.innerType).optional()
+  if (def.type === 'default') return coerceIfNumber(def.innerType).default(def.defaultValue)
 
   return schema
 }
@@ -119,7 +117,14 @@ export function wrapToolExecute(tool: Tool): (args: any) => Promise<McpToolResul
         toolCallId: crypto.randomUUID(),
         messages: [],
       })
-      return { content: toMcpContent(result) }
+      const envelope = result && typeof result === 'object' && 'content' in result
+        ? result as { isError?: boolean; _meta?: Record<string, unknown>; structuredContent?: Record<string, unknown> }
+        : undefined
+      return { content: toMcpContent(result),
+        ...(envelope?.isError !== undefined ? { isError: envelope.isError } : {}),
+        ...(envelope?._meta ? { _meta: envelope._meta } : {}),
+        ...(envelope?.structuredContent ? { structuredContent: envelope.structuredContent } : {}),
+      }
     } catch (err) {
       // err.message, not `${err}` — a thrown Error stringifies to "Error: <msg>",
       // which the `Error: ` prefix then doubled into "Error: Error: <msg>".

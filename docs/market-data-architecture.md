@@ -24,6 +24,11 @@ routes that have not yet moved to an OpenAlice-owned contract.
 
 ## Agent-facing Data Flow
 
+The optional local IbIvMonitor research bridge is exposed through
+`alice analysis monitor-context`. It reads verified immutable files and carries
+source timestamps, units, quality and evidence hashes; it never routes orders or
+changes allocations. See [[docs/ibiv-monitor-context.md]].
+
 Native coding agents use the injected CLI shims instead of importing packages
 or constructing provider HTTP requests:
 

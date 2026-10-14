@@ -340,7 +340,7 @@ export function registerCliRoutes(app: Hono, deps: CliGatewayDeps, manifestOnly 
     const result = await wrapToolExecute(tool)(validated)
     if (result.isError) {
       const text = result.content.map((b) => (b.type === 'text' ? b.text : '')).join('\n')
-      return c.json({ error: text || 'tool error' }, 500)
+      return c.json({ ...result, error: text || 'tool error' }, 500)
     }
     // A UTA Git commit is the durable business decision. Attribute only commits
     // created through an authoritative Workspace Session header; a bare local
@@ -375,6 +375,6 @@ export function registerCliRoutes(app: Hono, deps: CliGatewayDeps, manifestOnly 
     }
     // Hand back the MCP content blocks; the client prints text blocks verbatim
     // (data tools return one text block that already holds the JSON payload).
-    return c.json({ content: result.content })
+    return c.json(result)
   })
 }

@@ -47,7 +47,7 @@ export function registerProjectCliRoutes(app: Hono, toolCenter: ToolCenter, proj
     const args = await schema.safeParseAsync(body.args ?? {})
     if (!args.success) return c.json({ error: 'Validation failed', details: args.error.message }, 400)
     const result = await wrapToolExecute(tool)(args.data)
-    if (result.isError) return c.json({ error: result.content.filter(b => b.type === 'text').map(b => b.text).join('\n') }, 500)
-    return c.json({ content: result.content })
+    if (result.isError) return c.json({ ...result, error: result.content.filter(b => b.type === 'text').map(b => b.text).join('\n') }, 500)
+    return c.json(result)
   })
 }
