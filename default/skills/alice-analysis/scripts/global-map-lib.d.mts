@@ -36,3 +36,14 @@ export function computeValuation(payloads: Array<{ seriesId: string; fund: strin
   sources: Array<{ measureKey: string; seriesId: string; fund: string; asOf: string | null }>
   excluded: Array<{ seriesId: string; fund: string; asOf: string; reason: string }>
 }
+export interface Prepared { universe: unknown; parsed: Map<string, Point[]>; valuationPayloads: Map<string, unknown>; fetchedDay(id: string): string | null; fx: Record<string, Point[]>; warnings: string[] }
+export function prepareRun(run: { manifest: unknown; universe: unknown; payloadText: Map<string, { text: string; fetchedAt: string }> }): Prepared
+export function mapAt(prep: Prepared, asOf: string): { assets: MapEntry[]; macro: MapEntry[]; derived: MapEntry[]; groups: Record<string, unknown> }
+export interface Condition {
+  conditionId: string; role: 'invalidation' | 'trigger' | 'target' | 'review'; assetId: string; measureKey: string
+  timeframe: '1D' | '1W' | '1H'; op: '>' | '>=' | '<' | '<='; threshold: number | { assetId: string; measureKey: string }
+  consecutive: number; activeFrom?: string; expiresAt?: string
+}
+export function evaluateCondition(c: Condition, ctx: {
+  asOf: string; sessions(assetId: string, n: number): string[]; value(assetId: string, key: string, date: string): number | null
+}): { conditionId: string; result: 'met' | 'not-met' | 'not-evaluable'; value: number | null; observedAt: string | null; reason?: string }

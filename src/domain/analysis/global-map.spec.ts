@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  applyRelative, catalogEntries, computeSeries, computeValuation, extractValuation, deriveSeries, eurFactor, measureCatalog, parseSeries, renderTables,
+  applyRelative, catalogEntries, computeSeries, computeValuation, evaluateCondition, extractValuation, deriveSeries, eurFactor, measureCatalog, parseSeries, renderTables,
   rsiWilder, shiftDate, valueAt, type MapEntry, type Point,
 } from '../../../default/skills/alice-analysis/scripts/global-map-lib.mjs'
 import { readLimited, safeDir } from '../../../default/skills/alice-analysis/scripts/global-map-io.mjs'
@@ -183,6 +183,39 @@ describe('global map valuations', () => {
   it('never uses issuer values published after the map cutoff', () => {
     const v = computeValuation([{ seriesId: 's.late', fund: 'SPY', asOf: '2026-10-14', values: { pe_fy1: 20 } }], '2026-10-13')
     expect(v).toMatchObject({ status: 'missing', measures: {}, excluded: [{ seriesId: 's.late', reason: 'after-cutoff' }] })
+  })
+})
+
+describe('global map thesis conditions', () => {
+  const values: Record<string, Record<string, number | null>> = {
+    '2026-10-09': { 'g:dist': -13, 's:ret': 4, 'g:ret': 1 },
+    '2026-10-12': { 'g:dist': -11, 's:ret': 5, 'g:ret': 2 },
+    '2026-10-13': { 'g:dist': -14, 's:ret': 6, 'g:ret': null },
+  }
+  const ctx = {
+    asOf: '2026-10-13',
+    sessions: (_: string, n: number) => ['2026-10-09', '2026-10-12', '2026-10-13'].slice(-n),
+    value: (asset: string, key: string, date: string) => values[date][`${asset}:${key}`] ?? null,
+  }
+  const base = { conditionId: 'c', role: 'invalidation' as const, assetId: 'g', measureKey: 'dist', timeframe: '1D' as const, op: '<' as const, threshold: -12 }
+
+  it('needs every consecutive session to satisfy the comparison', () => {
+    expect(evaluateCondition({ ...base, consecutive: 1 }, ctx)).toEqual({ conditionId: 'c', result: 'met', value: -14, observedAt: '2026-10-13T00:00:00Z' })
+    expect(evaluateCondition({ ...base, consecutive: 2 }, ctx).result).toBe('not-met')
+    expect(evaluateCondition({ ...base, consecutive: 3, threshold: -10 }, ctx).result).toBe('met')
+  })
+
+  it('compares with another measure on the same date and reports gaps as not evaluable', () => {
+    const rel = { ...base, measureKey: 'ret', threshold: { assetId: 's', measureKey: 'ret' } }
+    expect(evaluateCondition({ ...rel, consecutive: 1 }, ctx)).toMatchObject({ result: 'not-evaluable', reason: 'Measure unavailable on 2026-10-13' })
+    expect(evaluateCondition({ ...rel, consecutive: 1 }, { ...ctx, asOf: '2026-10-12', sessions: () => ['2026-10-12'] }).result).toBe('met')
+  })
+
+  it('refuses unsupported timeframes, inactive or expired conditions and short histories', () => {
+    expect(evaluateCondition({ ...base, consecutive: 1, timeframe: '1H' }, ctx).reason).toContain('1H')
+    expect(evaluateCondition({ ...base, consecutive: 1, activeFrom: '2026-10-20T00:00:00Z' }, ctx).reason).toContain('not active')
+    expect(evaluateCondition({ ...base, consecutive: 1, expiresAt: '2026-10-01T00:00:00Z' }, ctx).reason).toContain('expired')
+    expect(evaluateCondition({ ...base, consecutive: 5 }, ctx).reason).toContain('Fewer than 5')
   })
 })
 

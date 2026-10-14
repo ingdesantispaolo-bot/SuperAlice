@@ -114,3 +114,24 @@ It derives catalog events from the universe (economic assets first, then their
 series with source, unit, method and yield type) and records only the missing
 ids through `alice memory`. Catalog identities are immutable: a changed source
 or method needs a new series id in the universe, never a rewrite.
+
+## Step 4: nightly thesis check
+
+```bash
+node .agents/skills/alice-analysis/scripts/global-map-check.mjs --run-id <id> [--dry-run]
+```
+
+Run after `global-map-calc.mjs` on the evening (after US close) run. It reads every
+active thesis with conditions through `get_market_context`, evaluates each
+condition on the run's verified payloads and records one `check` event (at most
+500 results). A condition with `consecutive: N` must hold on each of the asset's
+last N sessions; earlier sessions are recomputed as known at their own date, so
+the result does not depend on previous checks. Only `1D` conditions are computed;
+others, missing measures, inactive or expired conditions are `not-evaluable` with
+a reason. Valuation measures exist only at the issuer's publication date.
+
+The script pins the run, registers its metrics once as evidence (the id is kept
+in `global-map.evidence.json` of the run) and sends an Inbox note only for
+invalidations newly met on that thesis version. A failed delivery is reported,
+never counted as sent (exit code 3). The check never changes a thesis status:
+the scheduled review or the user decides.

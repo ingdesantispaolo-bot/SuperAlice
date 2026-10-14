@@ -1,5 +1,7 @@
-import { lstat, mkdir, realpath } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { lstat, mkdir, readFile, realpath } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
+import { gunzipSync } from 'node:zlib'
 
 // Workspace, gateway and network helpers shared by the global-map scripts.
 
@@ -34,6 +36,32 @@ export async function safeDir(root, rel, { exclusiveLast = false } = {}) {
   }
   if (!isInside(root, await realpath(current))) throw new Error(`Directory escaped the Workspace: ${rel}`)
   return current
+}
+
+/**
+ * Load a collected map run and verify the universe copy and every payload hash
+ * before anything is parsed. Payloads live in the temporary, content-addressed cache.
+ */
+export async function loadRun(root, runId) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/.test(runId)) throw new Error('Invalid run id')
+  const runDir = await realpath(join(root, 'research/market-assistant/runs', runId))
+  if (!isInside(root, runDir)) throw new Error('Run directory escaped the Workspace')
+  const manifest = JSON.parse(await readFile(join(runDir, 'global-map.manifest.json'), 'utf8'))
+  if (manifest.schema !== 'superai.global-map.manifest/1' || manifest.runId !== runId) throw new Error('Unexpected manifest')
+  const universeBytes = await readFile(join(runDir, manifest.universe.file))
+  if (createHash('sha256').update(universeBytes).digest('hex') !== manifest.universe.sha256) throw new Error('Universe copy integrity mismatch')
+  const payloadText = new Map()
+  for (const p of manifest.payloads) {
+    if (p.status !== 'ok') continue
+    if (!/^research\/market-assistant\/global-map\/cache\/payloads\/[a-f0-9]{64}\.txt(\.gz)?$/.test(p.file)) throw new Error(`Unexpected payload path: ${p.file}`)
+    const path = join(root, p.file)
+    if (!isInside(root, await realpath(path).catch(() => { throw new Error(`Payload no longer cached: ${p.file}`) }))) throw new Error('Payload escaped the Workspace')
+    const stored = await readFile(path)
+    const bytes = p.file.endsWith('.gz') ? gunzipSync(stored, { maxOutputLength: 40_000_000 }) : stored
+    if (createHash('sha256').update(bytes).digest('hex') !== p.sha256) throw new Error(`Evidence integrity mismatch: ${p.file}`)
+    payloadText.set(p.key, { text: bytes.toString('utf8'), fetchedAt: p.fetchedAt })
+  }
+  return { runDir, manifest, universe: JSON.parse(universeBytes.toString('utf8')), payloadText }
 }
 
 /** Read a response body with an explicit byte ceiling. */

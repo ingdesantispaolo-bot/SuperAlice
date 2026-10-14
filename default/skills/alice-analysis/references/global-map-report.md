@@ -80,7 +80,7 @@ a candidate thesis with `author.type = "user"`.
 | Kind | When | Content |
 |---|---|---|
 | weekly | Saturday morning, on Friday closes | The full report, judgments and theses revised freely |
-| daily | After the US close | Regenerated tables; prose only for sections with new data or crossed thresholds; other sections say "verificato, invariato" |
+| daily | After the US close | Collect, calculate, run the nightly thesis check; regenerated tables; prose only for sections with new data, crossed thresholds or theses to review; other sections say "verificato, invariato" |
 | morning | 08:40 Europe/Rome on weekdays | Asian close, overnight news, today's events, what to watch, in a few lines |
 
 Intraday checks read the first page; they never rewrite structural sections. A

@@ -431,6 +431,105 @@ export function computeValuation(payloads, asOf) {
   return { status: !sources.length ? 'missing' : staleDays === null || staleDays > 10 ? 'stale' : 'ok', asOf: oldest, staleDays, measures, sources, excluded }
 }
 
+// ---------------------------------------------------------------- whole map at a date
+
+const VALUATION_SOURCES = new Set(['ishares', 'ssga'])
+
+/** Parse a verified run once: series points, issuer valuations and warnings. */
+export function prepareRun({ manifest, universe, payloadText }) {
+  const warnings = [], parsed = new Map(), valuationPayloads = new Map()
+  for (const s of manifest.series) {
+    if (s.status !== 'ok') { warnings.push(`${s.seriesId}: collection failed`); continue }
+    if (VALUATION_SOURCES.has(s.source)) {
+      const v = JSON.parse(payloadText.get(s.payloads[0]).text)
+      valuationPayloads.set(s.seriesId, { seriesId: s.seriesId, fund: v.fund, asOf: v.asOf, values: v.values })
+      continue
+    }
+    try {
+      parsed.set(s.seriesId, parseSeries(s.source, s.payloads.map(k => payloadText.get(k).text), s.symbol))
+    } catch (error) {
+      warnings.push(`${s.seriesId}: unparseable payload (${error.message})`)
+    }
+  }
+  const fetchedDay = id => {
+    const series = manifest.series.find(x => x.seriesId === id)
+    return series ? payloadText.get(series.payloads[0])?.fetchedAt.slice(0, 10) ?? null : null
+  }
+  const fx = {
+    EURUSD: parsed.get('series.fx.eurusd.yahoo') ?? [], USDJPY: parsed.get('series.fx.usdjpy.yahoo') ?? [],
+    USDCNY: parsed.get('series.fx.usdcny.yahoo') ?? [], USDINR: parsed.get('series.fx.usdinr.yahoo') ?? [],
+  }
+  return { universe, parsed, valuationPayloads, fetchedDay, fx, warnings }
+}
+
+/** Every asset, macro series and derived series of the map as of a date, with group rankings. */
+export function mapAt(prep, asOf) {
+  const { universe, parsed, valuationPayloads, fetchedDay, fx } = prep
+  const entry = (spec, base) => {
+    const points = parsed.get(spec.seriesId)
+    if (spec.source === 'none') return { ...base, status: 'gap', lastDate: null, staleDays: null, measures: {} }
+    if (!points) return { ...base, status: 'missing', lastDate: null, staleDays: null, measures: {} }
+    // A 24/7 market's bar for the collection day (UTC) is still forming.
+    const incompleteFrom = spec.calendar === '7d' ? fetchedDay(spec.seriesId) : null
+    return { ...base, ...computeSeries(spec, points, { asOf, fx, incompleteFrom }) }
+  }
+  const assets = universe.assets.map(a => entry(
+    { ...a.series, kind: a.kind, currency: a.currency, frequency: a.frequency, calendar: a.calendar },
+    { assetId: a.assetId, label: a.label, group: a.group, assetClass: a.assetClass, kind: a.kind, currency: a.currency, frequency: a.frequency, seriesId: a.series.seriesId, source: a.series.source, notes: a.notes ?? null },
+  ))
+  const macro = universe.macro.map(m => entry(m, { assetId: m.assetId, label: m.label, assetClass: m.assetClass, kind: m.kind, frequency: m.frequency, seriesId: m.seriesId, source: m.source, notes: null }))
+  const frequencyOf = id => [...universe.assets.map(x => ({ ...x.series, frequency: x.frequency })), ...universe.aux, ...universe.macro].find(s => s.seriesId === id)?.frequency
+  const derived = universe.derived.map(d => {
+    const a = parsed.get(d.a), b = parsed.get(d.b)
+    const kind = d.op === 'ratio' ? 'price-ratio' : 'spread-bp'
+    const monthly = [d.a, d.b].some(id => frequencyOf(id) === 'monthly')
+    const formula = d.op === 'ratio' ? `${d.a} / ${d.b}` : `(${d.a} − ${d.b}) × 100 (bp)`
+    const base = { assetId: d.assetId, label: d.label, assetClass: d.assetClass, kind, frequency: monthly ? 'monthly' : 'daily', seriesId: d.seriesId, formula, source: 'derived', notes: d.notes ?? null }
+    if (!a || !b) return { ...base, status: 'missing', lastDate: null, staleDays: null, measures: {} }
+    return { ...base, ...computeSeries({ kind, frequency: base.frequency, source: 'derived' }, deriveSeries(d.op, a, b, monthly), { asOf }) }
+  })
+  // Issuer fundamentals attach to their asset; each valuation measure keeps its own series id.
+  for (const a of assets) {
+    if (!(universe.valuations ?? []).some(v => v.assetId === a.assetId)) continue
+    const payloads = universe.valuations.filter(v => v.assetId === a.assetId).map(v => valuationPayloads.get(v.seriesId)).filter(Boolean)
+    const v = computeValuation(payloads, asOf)
+    a.valuation = { status: v.status, asOf: v.asOf, staleDays: v.staleDays, sources: v.sources, excluded: v.excluded }
+    Object.assign(a.measures, v.measures)
+    a.measureSeries = Object.fromEntries(v.sources.map(x => [x.measureKey, x.seriesId]))
+  }
+  const ranking = applyRelative(universe.groups, assets)
+  const groups = Object.fromEntries(Object.entries(universe.groups).map(([id, g]) => [id, { ...g, rankingByRet3mEur: ranking[id] ?? null }]))
+  return { assets, macro, derived, groups }
+}
+
+// ---------------------------------------------------------------- thesis conditions
+
+const COMPARE = { '>': (a, b) => a > b, '>=': (a, b) => a >= b, '<': (a, b) => a < b, '<=': (a, b) => a <= b }
+
+/**
+ * Evaluate one thesis condition. sessions(assetId, n) gives the asset's last n
+ * observation dates up to the cutoff (oldest first); value(assetId, key, date)
+ * gives a measure as known at that date. Met only if every one of the
+ * `consecutive` sessions satisfies the comparison.
+ */
+export function evaluateCondition(c, { asOf, sessions, value }) {
+  const na = reason => ({ conditionId: c.conditionId, result: 'not-evaluable', value: null, observedAt: null, reason })
+  if (c.timeframe !== '1D') return na(`Timeframe ${c.timeframe} is not computed by ${METHOD_VERSION}`)
+  if (c.activeFrom && c.activeFrom.slice(0, 10) > asOf) return na('Condition is not active yet at the map date')
+  if (c.expiresAt && c.expiresAt.slice(0, 10) < asOf) return na('Condition expired before the map date')
+  const dates = sessions(c.assetId, c.consecutive)
+  if (dates.length < c.consecutive) return na(`Fewer than ${c.consecutive} sessions available for ${c.assetId}`)
+  const checks = []
+  for (const date of dates) {
+    const v = value(c.assetId, c.measureKey, date)
+    const t = typeof c.threshold === 'number' ? c.threshold : value(c.threshold.assetId, c.threshold.measureKey, date)
+    if (v === null || v === undefined || t === null || t === undefined) return na(`Measure unavailable on ${date}`)
+    checks.push({ date, v, ok: COMPARE[c.op](v, t) })
+  }
+  const latest = checks.at(-1)
+  return { conditionId: c.conditionId, result: checks.every(x => x.ok) ? 'met' : 'not-met', value: latest.v, observedAt: `${latest.date}T00:00:00Z` }
+}
+
 // ---------------------------------------------------------------- memory catalog
 
 const SOURCE_LABEL = {
