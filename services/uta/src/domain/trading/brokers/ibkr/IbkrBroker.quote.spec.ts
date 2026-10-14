@@ -13,7 +13,7 @@ function brokerWithSnapshot(snap: TickSnapshot) {
     requestCollector: vi.fn(async () => [{ contract: Object.assign(new Contract(), resolved) }]),
     requestSnapshot: vi.fn(async () => snap),
   }
-  ;(broker as unknown as { client: unknown }).client = { reqContractDetails: vi.fn(), reqMktData: vi.fn() }
+  ;(broker as unknown as { client: unknown }).client = { reqContractDetails: vi.fn(), reqMktData: vi.fn(), cancelMktData: vi.fn() }
   return broker
 }
 

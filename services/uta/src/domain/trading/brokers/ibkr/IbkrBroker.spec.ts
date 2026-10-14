@@ -69,6 +69,7 @@ function brokerWithContractIo(resolvedContract = usdChfContract()): {
   const client = {
     reqContractDetails: vi.fn(),
     reqMktData: vi.fn(),
+    cancelMktData: vi.fn(),
     placeOrder: vi.fn(),
     cancelOrder: vi.fn(),
   }

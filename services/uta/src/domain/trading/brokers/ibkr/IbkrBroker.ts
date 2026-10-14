@@ -46,6 +46,7 @@ import {
 import '../../contract-ext.js'
 import { derivePositionMath } from '../../position-math.js'
 import { RequestBridge } from './request-bridge.js'
+import { twsSnapshotBudget } from './snapshot-budget.js'
 import { resolveSymbol } from './ibkr-contracts.js'
 import { buildHistoricalRequest, toBars, IBKR_BAR_INTERVALS } from './ibkr-historical.js'
 import type { IbkrBrokerConfig } from './ibkr-types.js'
@@ -927,13 +928,30 @@ export class IbkrBroker implements IBroker {
     options: { resolveOnBidAsk?: boolean } = {},
   ): Promise<{ routedContract: Contract; snap: import('./ibkr-types.js').TickSnapshot }> {
     const routedContract = await this.resolveRoutableContract(contract)
-    const reqId = this.bridge.allocReqId()
-    const promise = this.bridge.requestSnapshot(reqId, undefined, options)
-    // `regulatorySnapshot=false`: never opt the account into per-request paid
-    // US regulatory snapshots. Live entitlement or free delayed data may still
-    // satisfy the ordinary snapshot; otherwise callers retain cached marks.
-    this.client.reqMktData(reqId, routedContract, '', true, false, [])
-    return { routedContract, snap: await promise }
+    const release = await twsSnapshotBudget(this.config.host ?? '127.0.0.1', this.config.port ?? 7497).acquire()
+    let reqId: number | undefined
+    try {
+      this._ensureAlive()
+      reqId = this.bridge.allocReqId()
+      const promise = this.bridge.requestSnapshot(reqId, undefined, options)
+      // Both ordinary quotes and early-resolving option overlays use this cap.
+      // Never request per-call paid regulatory snapshots.
+      try { this.client.reqMktData(reqId, routedContract, '', true, false, []) }
+      catch (error) {
+        // The collector already owns a timer; settle it if dispatch failed synchronously.
+        void promise.catch(() => {})
+        this.bridge.markDead('Snapshot dispatch failed')
+        throw error
+      }
+      return { routedContract, snap: await promise }
+    } finally {
+      try {
+        // Early bid/ask completion does not itself free the physical IBKR line.
+        if (reqId !== undefined) this.client.cancelMktData(reqId)
+      } catch {
+        this.bridge.markDead('Snapshot cancellation failed; reconnect required')
+      } finally { release() }
+    }
   }
 
   async getMarketClock(): Promise<MarketClock> {
