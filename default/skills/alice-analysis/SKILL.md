@@ -1,12 +1,41 @@
 ---
 name: alice-analysis
 description: >
-  Optional technical-analysis formulas and snapshots through alice analysis.
+  Use for an evolving market overview, regime changes, correlations, anomalies,
+  overbought/oversold conditions and portfolio risk across intraday, swing and
+  long-term horizons. Also owns IbIvMonitor context, IBKR research archives,
+  history acquisition, IBKR news/analyst actions, offline market memory and optional technical-analysis
+  formulas and snapshots.
   Documents the bounded expression language, barId source selection and panels.
   Raw K-lines for local scripts are available through alice market bars.
 ---
 
 # `alice analysis` — Quant Calculator (v2)
+
+## Market assistant across time horizons
+
+Read [the market-assistant procedure](references/market-assistant.md) for market
+briefings, change detection, cross-market relationships, technical extremes or
+portfolio evaluation. It defines evidence, comparisons, persistent research
+state and meaningful notifications. Prefer the user's existing local profile;
+the example profile supplies explicit research defaults, not personal targets.
+
+## IbIvMonitor research sources
+
+For preserved evidence, temporal thesis revisions and offline context, read
+[the market-memory procedure](references/market-memory.md). `alice memory`
+exposes the workspace-owned catalog, append-only entries and get_market_context.
+Historical imports do not backdate knowledge; monitor data ownership is unchanged.
+
+Read [the monitor procedure](references/monitor.md) before using monitor data or
+acquiring IBKR research history. `alice monitor` exposes its live MCP contract;
+`alice analysis monitor-context` retains immutable hash/as-of file evidence.
+Use these for monitor-derived macro/GEX and cached research series, rather than
+web approximations. Availability and freshness come from tool results.
+
+For IBKR headlines, articles and structured analyst actions read
+[the monitor news procedure](references/monitor-news.md). It owns durable
+arrival cursors and keeps the monitor archive separate from subscribed RSS.
 
 A bounded, side-effect-free expression language for technical analysis. You write
 a short script; it fetches K-lines by **barId** and returns a value (or a panel
