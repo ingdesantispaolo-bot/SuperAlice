@@ -103,7 +103,8 @@ Shared-file changes and contract clarifications are announced there first.
   attribution are installed. Three Issue What updates committed in the private
   desk as 0fa3db7; schedules/owner/timeout verified unchanged. Ten existing
   harness/template assertions and app/test typechecks pass. Running backend
-  64c516a1 exposes context/2 and signal publication; native X5 proof follows.
+  64c516a1 exposes context/2 and signal publication; the native X5 proof above
+  is accepted. Steady controls reuse existing receipts (private commit 77352d1).
 - [ ] X7 producer dependency: SUPERAI-EXTERNAL-SERIES-01 was forwarded verbatim
   to the monitor coordination file on G:, extending SUPERAI-MEMORY-READONLY-01.
   The owner has a historical archive study, but the requested external-series
@@ -124,6 +125,18 @@ explicitly. X4 subsequently replaces full scans with the derived index and raise
 to 100,000 events/512 MB only after the load proof. Derived C2 source
 expressions need stable catalog series identifiers before being referenced by
 conditions; ordinary measures are not blocked by unused unresolved definitions.
-No Claude-owned sources or C# code were changed. No production approvals, thesis
-activations, orders, schedule changes, managed-desk rollout or public push were
-performed by these acceptance tests.
+No Claude-owned sources or C# code were changed. X1/X2 isolated acceptance
+performed no production approvals, thesis activations, orders, schedule changes,
+managed rollout or public push. X3-X6 subsequently added the authorized live
+rollout/control proofs described above; trading authority and calendars stayed
+unchanged. The partial map review was sent to Claude in coordination (future
+valuation cutoff, raw-input retention, parent-path checks, network byte budgets
+and injected provenance headers), without taking over his files.
+
+Final X3-X6 gate: critical-local accepted, 19 assertions and all 15 required
+evidence items; receipt ../../dev/evidence/market-memory/x3-x6-critical-local.json.
+It tested clean 8cc742f7; subsequent source changes are plan documentation only,
+with no src/default diff from running build 64c516a1. Focused memory/CLI/index,
+harness/template assertions and app/test typechecks pass. The older full-repo
+Windows/general failures remain documented under X0; no wholly green repository
+claim is made. Consolidated receipt x3-x6-final-receipt.json is local-only.
