@@ -1,3 +1,5 @@
+import { MONITOR_MCP_COMMANDS } from '../domain/analysis/monitor-mcp-catalog.js'
+
 /** Public CLI exports. alice combines research and Workspace collaboration;
  * dispatch retains each tool's global or Workspace registry ownership.
  * The workspace export remains a compatibility endpoint for old shims.
@@ -23,11 +25,13 @@ const BASE_EXPORTS: Record<string, CliExport> = {
     scope: 'global',
     description: 'Market & research data sources',
     groupDescriptions: {
+      monitor: 'Consult IbIvMonitor context, history, IBKR news and analytics; request research data collection',
       rss: 'Search and read the user\'s collected subscribed-feed archive',
       market: 'Discover symbols, bar sources, and optional market-data vendors',
       analysis: 'Read dated K-lines and calculate indicators',
     },
     commands: {
+      monitor: Object.fromEntries(Object.entries(MONITOR_MCP_COMMANDS).map(([verb, name]) => [verb, `ibiv_${name}`])),
       // `rss`, not `news`: the backing store is the RSS collector's archive —
       // only what the user's subscribed feeds pulled. Naming it "news" baited
       // agents into treating it as general news search; the group name should
@@ -55,6 +59,10 @@ const BASE_EXPORTS: Record<string, CliExport> = {
         quant: 'calculateQuant',
         // Dated as-of read with a freshness contract for retrospective analysis.
         snapshot: 'marketSnapshot',
+        'monitor-context': 'monitorContext',
+        'monitor-service-status': 'monitorServiceStatus',
+        'monitor-service-set': 'monitorServiceSet',
+        'monitor-history': 'monitorHistory',
       },
     },
   },
@@ -144,6 +152,7 @@ const BASE_EXPORTS: Record<string, CliExport> = {
       signature: 'Show this Session\'s safe product identity',
       session: 'Rename or inspect this Workspace\'s product Sessions',
       track: 'Maintain the shared index of durable assets and topics',
+      memory: 'Preserve market evidence and horizon-specific theses; retrieve local context even with the monitor offline',
       harness: 'Review and update Project-provided Skill files while respecting Workspace preferences',
       template: 'Preview or apply managed Workspace-template updates',
     },
@@ -200,6 +209,11 @@ const BASE_EXPORTS: Record<string, CliExport> = {
       track: {
         add: 'entity_upsert',
         search: 'entity_search',
+      },
+      memory: {
+        catalog: 'market_memory_catalog',
+        record: 'market_memory_record',
+        context: 'get_market_context',
       },
       // Current-Workspace managed template reconciliation. Preview is the
       // default; `--apply` explicitly performs the reviewed safe operation.

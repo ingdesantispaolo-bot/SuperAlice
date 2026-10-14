@@ -16,6 +16,11 @@ import { createEquityTools } from '../../../src/tool/equity.js'
 import { createEconomyTools } from '../../../src/tool/economy.js'
 import { createQuantTools } from '../../../src/tool/quant.js'
 import { createSnapshotTools } from '../../../src/tool/snapshot.js'
+import { createMonitorContextTools } from '../../../src/tool/monitor-context.js'
+import { createMonitorServiceTools } from '../../../src/tool/monitor-service.js'
+import { MONITOR_MCP_COMMANDS } from '../../../src/domain/analysis/monitor-mcp-catalog.js'
+import { tool } from 'ai'
+import { z } from 'zod'
 import { createSimulateTools } from '../../../src/tool/simulate.js'
 import { createThinkingTools } from '../../../src/tool/thinking.js'
 import { inboxPushFactory } from '../../../src/tool/inbox-push.js'
@@ -30,6 +35,7 @@ import { issueToolFactories } from '../../../src/tool/issue-tools.js'
 import { sessionSignatureFactory } from '../../../src/tool/session-signature.js'
 import { sessionRenameFactory } from '../../../src/tool/session-rename.js'
 import { provenanceShowFactory } from '../../../src/tool/provenance-show.js'
+import { marketMemoryFactories } from '../../../src/tool/market-memory.js'
 import { conversationToolFactories } from '../../../src/tool/conversation.js'
 import { artifactConversationToolFactories } from '../../../src/tool/conversation-artifacts.js'
 import { createTradingTools } from '../../../src/tool/trading.js'
@@ -54,6 +60,12 @@ describe('CLI_EXPORTS — data export (global tools)', () => {
   tc.register(createSnapshotTools(any), 'snapshot')
   tc.register(createSimulateTools(any), 'simulate')
   tc.register(createEconomyTools(any, any), 'economy')
+  tc.register(createMonitorContextTools(async () => null), 'monitor-context')
+  tc.register(createMonitorServiceTools(null, async () => null), 'monitor-service')
+  // Optional remote tools are instantiated from the executable's live schemas;
+  // this mapping assertion only checks their reviewed names (native probe checks discovery).
+  tc.register(Object.fromEntries(Object.values(MONITOR_MCP_COMMANDS).map(name =>
+    [`ibiv_${name}`, tool({ inputSchema: z.object({}), execute: async () => ({}) })])), 'monitor-mcp')
 
   it('every mapped verb resolves to a registered global tool', () => {
     for (const name of mappedToolNames('data')) {
@@ -119,6 +131,7 @@ describe('CLI_EXPORTS — workspace export (scoped collaboration tools)', () => 
   wtc.register(sessionSignatureFactory)
   wtc.register(sessionRenameFactory)
   wtc.register(provenanceShowFactory)
+  for (const f of marketMemoryFactories) wtc.register(f)
   for (const f of conversationToolFactories) wtc.register(f)
   for (const f of artifactConversationToolFactories) wtc.register(f)
   const built = wtc.build({
