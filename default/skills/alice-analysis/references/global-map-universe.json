@@ -1,6 +1,6 @@
 {
   "schema": "superai.global-map.universe/1",
-  "revision": "2026-10-14.3",
+  "revision": "2026-10-14.4",
   "baseCurrency": "EUR",
   "note": "50 core assets chosen for analysis (not for tradability); aux FX, monitor futures and macro series are not counted. Sources verified in phase A (2026-10-13) and on 2026-10-14. Yahoo returns use adj_close. Known gap outside the 50: euro investment-grade credit spread (no free daily source).",
   "groups": {
@@ -1032,6 +1032,260 @@
       "a": "series.cmd.gold.yahoo",
       "b": "series.cmd.silver.yahoo",
       "unit": "ratio"
+    }
+  ],
+  "valuations": [
+    {
+      "assetId": "asset.eq.global",
+      "seriesId": "series.valuation.eq.global.ishares-acwi",
+      "provider": "ishares",
+      "fund": "ACWI",
+      "url": "https://www.ishares.com/us/products/239600/ishares-msci-acwi-etf",
+      "fields": [
+        "pe_trailing",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.eq.us",
+      "seriesId": "series.valuation.eq.us.ishares-ivv",
+      "provider": "ishares",
+      "fund": "IVV",
+      "url": "https://www.ishares.com/us/products/239726/ishares-core-sp-500-etf",
+      "fields": [
+        "pe_trailing",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.eq.us",
+      "seriesId": "series.valuation.eq.us.ssga-spy",
+      "provider": "ssga",
+      "fund": "SPY",
+      "url": "https://www.ssga.com/us/en/intermediary/etfs/spdr-sp-500-etf-trust-spy",
+      "fields": [
+        "pe_fy1"
+      ]
+    },
+    {
+      "assetId": "asset.eq.eu",
+      "seriesId": "series.valuation.eq.eu.ishares-ieur",
+      "provider": "ishares",
+      "fund": "IEUR",
+      "url": "https://www.ishares.com/us/products/264617/ishares-core-msci-europe-etf",
+      "fields": [
+        "pe_trailing",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.eq.it",
+      "seriesId": "series.valuation.eq.it.ishares-ewi",
+      "provider": "ishares",
+      "fund": "EWI",
+      "url": "https://www.ishares.com/us/products/239654/ishares-msci-italy-etf",
+      "fields": [
+        "pe_trailing",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.eq.jp",
+      "seriesId": "series.valuation.eq.jp.ishares-ewj",
+      "provider": "ishares",
+      "fund": "EWJ",
+      "url": "https://www.ishares.com/us/products/239665/ishares-msci-japan-etf",
+      "fields": [
+        "pe_trailing",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.eq.cn",
+      "seriesId": "series.valuation.eq.cn.ishares-mchi",
+      "provider": "ishares",
+      "fund": "MCHI",
+      "url": "https://www.ishares.com/us/products/239619/ishares-msci-china-etf",
+      "fields": [
+        "pe_trailing",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.eq.in",
+      "seriesId": "series.valuation.eq.in.ishares-inda",
+      "provider": "ishares",
+      "fund": "INDA",
+      "url": "https://www.ishares.com/us/products/239659/ishares-msci-india-etf",
+      "fields": [
+        "pe_trailing",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.eq.em",
+      "seriesId": "series.valuation.eq.em.ishares-eem",
+      "provider": "ishares",
+      "fund": "EEM",
+      "url": "https://www.ishares.com/us/products/239637/ishares-msci-emerging-markets-etf",
+      "fields": [
+        "pe_trailing",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.style.us.growth",
+      "seriesId": "series.valuation.style.us.growth.ishares-ivw",
+      "provider": "ishares",
+      "fund": "IVW",
+      "url": "https://www.ishares.com/us/products/239725/ishares-sp-500-growth-etf",
+      "fields": [
+        "pe_trailing",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.style.us.value",
+      "seriesId": "series.valuation.style.us.value.ishares-ive",
+      "provider": "ishares",
+      "fund": "IVE",
+      "url": "https://www.ishares.com/us/products/239728/ishares-sp-500-value-etf",
+      "fields": [
+        "pe_trailing",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.style.us.small",
+      "seriesId": "series.valuation.style.us.small.ishares-iwm",
+      "provider": "ishares",
+      "fund": "IWM",
+      "url": "https://www.ishares.com/us/products/239710/ishares-russell-2000-etf",
+      "fields": [
+        "pe_trailing",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.sector.us.materials",
+      "seriesId": "series.valuation.sector.us.materials.ssga-xlb",
+      "provider": "ssga",
+      "fund": "XLB",
+      "url": "https://www.ssga.com/us/en/intermediary/etfs/the-materials-select-sector-spdr-fund-xlb",
+      "fields": [
+        "pe_fy1",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.sector.us.communication",
+      "seriesId": "series.valuation.sector.us.communication.ssga-xlc",
+      "provider": "ssga",
+      "fund": "XLC",
+      "url": "https://www.ssga.com/us/en/intermediary/etfs/the-communication-services-select-sector-spdr-fund-xlc",
+      "fields": [
+        "pe_fy1",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.sector.us.energy",
+      "seriesId": "series.valuation.sector.us.energy.ssga-xle",
+      "provider": "ssga",
+      "fund": "XLE",
+      "url": "https://www.ssga.com/us/en/intermediary/etfs/the-energy-select-sector-spdr-fund-xle",
+      "fields": [
+        "pe_fy1",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.sector.us.financials",
+      "seriesId": "series.valuation.sector.us.financials.ssga-xlf",
+      "provider": "ssga",
+      "fund": "XLF",
+      "url": "https://www.ssga.com/us/en/intermediary/etfs/the-financial-select-sector-spdr-fund-xlf",
+      "fields": [
+        "pe_fy1",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.sector.us.industrials",
+      "seriesId": "series.valuation.sector.us.industrials.ssga-xli",
+      "provider": "ssga",
+      "fund": "XLI",
+      "url": "https://www.ssga.com/us/en/intermediary/etfs/the-industrial-select-sector-spdr-fund-xli",
+      "fields": [
+        "pe_fy1",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.sector.us.tech",
+      "seriesId": "series.valuation.sector.us.tech.ssga-xlk",
+      "provider": "ssga",
+      "fund": "XLK",
+      "url": "https://www.ssga.com/us/en/intermediary/etfs/the-technology-select-sector-spdr-fund-xlk",
+      "fields": [
+        "pe_fy1",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.sector.us.staples",
+      "seriesId": "series.valuation.sector.us.staples.ssga-xlp",
+      "provider": "ssga",
+      "fund": "XLP",
+      "url": "https://www.ssga.com/us/en/intermediary/etfs/the-consumer-staples-select-sector-spdr-fund-xlp",
+      "fields": [
+        "pe_fy1",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.sector.us.realestate",
+      "seriesId": "series.valuation.sector.us.realestate.ssga-xlre",
+      "provider": "ssga",
+      "fund": "XLRE",
+      "url": "https://www.ssga.com/us/en/intermediary/etfs/the-real-estate-select-sector-spdr-fund-xlre",
+      "fields": [
+        "pe_fy1",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.sector.us.utilities",
+      "seriesId": "series.valuation.sector.us.utilities.ssga-xlu",
+      "provider": "ssga",
+      "fund": "XLU",
+      "url": "https://www.ssga.com/us/en/intermediary/etfs/the-utilities-select-sector-spdr-fund-xlu",
+      "fields": [
+        "pe_fy1",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.sector.us.health",
+      "seriesId": "series.valuation.sector.us.health.ssga-xlv",
+      "provider": "ssga",
+      "fund": "XLV",
+      "url": "https://www.ssga.com/us/en/intermediary/etfs/the-health-care-select-sector-spdr-fund-xlv",
+      "fields": [
+        "pe_fy1",
+        "pb"
+      ]
+    },
+    {
+      "assetId": "asset.sector.us.discretionary",
+      "seriesId": "series.valuation.sector.us.discretionary.ssga-xly",
+      "provider": "ssga",
+      "fund": "XLY",
+      "url": "https://www.ssga.com/us/en/intermediary/etfs/the-consumer-discretionary-select-sector-spdr-fund-xly",
+      "fields": [
+        "pe_fy1",
+        "pb"
+      ]
     }
   ]
 }

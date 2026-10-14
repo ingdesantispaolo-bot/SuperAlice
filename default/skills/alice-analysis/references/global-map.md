@@ -79,6 +79,20 @@ the library's `METHOD_VERSION` changes and comparisons restart from a new baseli
   the future, not Dated Brent spot. Bundesbank yields come from the Federal
   securities term structure, not the on-the-run Bund. Italy 10Y is monthly only.
 
+## Valuations
+
+`valuations` in the universe maps equity assets to the issuer page of a reference
+fund: iShares for areas, styles and small caps (P/E on trailing earnings, P/B),
+SPDR for US sectors and the S&P 500 (P/E on next fiscal year earnings, P/B).
+They are free, updated daily or weekly by the issuer, and computed with each
+issuer's own method: compare like with like (an iShares trailing P/E with
+another iShares trailing P/E). The reference fund is not always the price
+index of the row (Japan: Nikkei price, MSCI Japan valuation via EWJ); the
+table names the fund. The collector keeps the page hash and the verbatim
+value fragments, not the 2 MB page. Values older than 10 days are `stale`.
+Only current values exist so far: comparisons with each market's own
+valuation history need the monitor to persist these series over time.
+
 Measures are descriptive. An RSI extreme, a ranking or a trend state is not a
 buy/sell signal, and this procedure authorizes research only, never orders.
 

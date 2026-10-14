@@ -3,6 +3,7 @@ import { copyFile, mkdir, readdir, readFile, realpath, unlink, writeFile } from 
 import { dirname, isAbsolute, join, relative } from 'node:path'
 import tls from 'node:tls'
 import { fileURLToPath } from 'node:url'
+import { extractValuation } from './global-map-lib.mjs'
 
 // Bounded data collector for the global market map, not an Agent/model loop.
 // Saves every original payload with its SHA-256 before any calculation.
@@ -105,6 +106,15 @@ function requestsFor(spec) {
   if (s === 'yahoo') return [{ key: `yahoo:${sym}`, describe: { tool: tools.bars, args: { symbol: sym, assetClass: spec.assetClass, interval: '1d', start } }, run: () => invoke('data', tools.bars, { symbol: sym, assetClass: spec.assetClass, interval: '1d', start }) }]
   if (s === 'fred') return [{ key: `fred:${sym}`, describe: { tool: tools.fred, args: { symbol: sym, start_date: start } }, run: () => invoke('traderhub', tools.fred, { symbol: sym, start_date: start }) }]
   if (s === 'monitor') return [{ key: `monitor:${sym}`, describe: { tool: tools.monitorDaily, args: { id: sym } }, run: () => invokeMonitor(tools.monitorDaily, { id: sym }) }]
+  if (s === 'ishares' || s === 'ssga') {
+    // Issuer pages are ~2 MB: keep the page hash and the verbatim value fragments, not the page.
+    return [{ key: `${s}:${spec.fund}`, describe: { url: sym }, run: async () => {
+      const html = await download(sym)
+      const extracted = extractValuation(s, html)
+      if (!Object.keys(extracted.values).length) throw new Error(`No fundamentals found on the ${spec.fund} page`)
+      return JSON.stringify({ provider: s, fund: spec.fund, url: sym, pageSha256: createHash('sha256').update(html).digest('hex'), pageBytes: Buffer.byteLength(html), ...extracted })
+    } }]
+  }
   if (s === 'traderhub-valuation') return [{ key: 'traderhub:valuation', describe: { tool: tools.board, args: { board: 'valuation' } }, run: () => invoke('traderhub', tools.board, { board: 'valuation' }) }]
   if (s === 'bundesbank') {
     const url = `https://api.statistiken.bundesbank.de/rest/data/${sym}?format=csv&lang=en&startPeriod=${start}`
@@ -125,6 +135,7 @@ function requestsFor(spec) {
 const specs = [
   ...universe.assets.map(a => ({ ...a.series, frequency: a.frequency })),
   ...universe.aux, ...universe.macro,
+  ...(universe.valuations ?? []).map(v => ({ seriesId: v.seriesId, source: v.provider, symbol: v.url, fund: v.fund })),
 ].filter(s => s.source !== 'none')
 
 const unique = new Map()

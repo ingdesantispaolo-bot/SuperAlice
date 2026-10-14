@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
 import {
-  METHOD_VERSION, applyRelative, computeSeries, deriveSeries, measureCatalog, parseSeries, renderTables,
+  METHOD_VERSION, applyRelative, computeSeries, computeValuation, deriveSeries, measureCatalog, parseSeries, renderTables,
 } from './global-map-lib.mjs'
 
 // Offline, deterministic calculation over a collected run: no network, no model, no clock.
@@ -43,8 +43,15 @@ for (const p of manifest.payloads) {
 
 const warnings = []
 const parsed = new Map()
+const VALUATION_SOURCES = new Set(['ishares', 'ssga'])
+const valuationPayloads = new Map()
 for (const s of manifest.series) {
   if (s.status !== 'ok') { warnings.push(`${s.seriesId}: collection failed`); continue }
+  if (VALUATION_SOURCES.has(s.source)) {
+    const v = JSON.parse(payloadText.get(s.payloads[0]).text)
+    valuationPayloads.set(s.seriesId, { seriesId: s.seriesId, fund: v.fund, asOf: v.asOf, values: v.values })
+    continue
+  }
   try {
     parsed.set(s.seriesId, parseSeries(s.source, s.payloads.map(k => payloadText.get(k).text), s.symbol))
   } catch (error) {
@@ -86,6 +93,16 @@ const derived = universe.derived.map(d => {
   if (!a || !b) return { ...base, status: 'missing', lastDate: null, staleDays: null, measures: {} }
   return { ...base, ...computeSeries({ kind, frequency: base.frequency, source: 'derived' }, deriveSeries(d.op, a, b, monthly), { asOf }) }
 })
+
+// Issuer fundamentals attach to their asset; each valuation measure keeps its own series id.
+for (const a of assets) {
+  const payloads = (universe.valuations ?? []).filter(v => v.assetId === a.assetId).map(v => valuationPayloads.get(v.seriesId)).filter(Boolean)
+  if (!(universe.valuations ?? []).some(v => v.assetId === a.assetId)) continue
+  const v = computeValuation(payloads, asOf)
+  a.valuation = { status: v.status, asOf: v.asOf, staleDays: v.staleDays, sources: v.sources }
+  Object.assign(a.measures, v.measures)
+  a.measureSeries = Object.fromEntries(v.sources.map(x => [x.measureKey, x.seriesId]))
+}
 
 const ranking = applyRelative(universe.groups, assets)
 const groups = Object.fromEntries(Object.entries(universe.groups).map(([id, g]) => [id, { ...g, rankingByRet3mEur: ranking[id] ?? null }]))

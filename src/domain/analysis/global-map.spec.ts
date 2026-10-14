@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  applyRelative, catalogEntries, computeSeries, deriveSeries, eurFactor, measureCatalog, parseSeries, renderTables,
+  applyRelative, catalogEntries, computeSeries, computeValuation, extractValuation, deriveSeries, eurFactor, measureCatalog, parseSeries, renderTables,
   rsiWilder, shiftDate, valueAt, type MapEntry, type Point,
 } from '../../../default/skills/alice-analysis/scripts/global-map-lib.mjs'
 
@@ -151,6 +151,32 @@ describe('global map measures', () => {
   })
 })
 
+describe('global map valuations', () => {
+  it('extracts iShares and SPDR fund fundamentals with their dates', () => {
+    const ishares = '{&quot;priceEarnings&quot;:{&quot;visible&quot;:true,&quot;label&quot;:&quot;P/E Ratio&quot;,&quot;formattedValue&quot;:&quot;19.50&quot;,&quot;sortOrder&quot;:35,&quot;infoBubble&quot;:&quot;text&quot;,&quot;formattedAsOfDate&quot;:&quot;Oct 09, 2026&quot;,&quot;name&quot;:&quot;priceEarnings&quot;},'
+      + '&quot;priceBook&quot;:{&quot;visible&quot;:true,&quot;label&quot;:&quot;P/B Ratio&quot;,&quot;formattedValue&quot;:&quot;2.71&quot;,&quot;sortOrder&quot;:36,&quot;formattedAsOfDate&quot;:&quot;Oct 09, 2026&quot;,&quot;name&quot;:&quot;priceBook&quot;}}'
+    const i = extractValuation('ishares', ishares)
+    expect(i).toMatchObject({ asOf: '2026-10-09', values: { pe_trailing: 19.5, pb: 2.71 } })
+    expect(i.fragments.priceEarnings).not.toContain('infoBubble')
+    const ssga = '<span>as of Oct 13 2026</span><td>&#xfeff;Price/Earnings Ratio FY1</td><td>The weighted harmonic average</td><td> 24.58 </td>'
+      + '<td>&#xfeff;Price/Book Ratio</td><td>description</td><td>12.20</td>'
+    expect(extractValuation('ssga', ssga)).toMatchObject({ asOf: '2026-10-13', values: { pe_fy1: 24.58, pb: 12.2 } })
+    expect(extractValuation('ishares', '<html>no data</html>').values).toEqual({})
+  })
+
+  it('keeps the first provider per measure and flags old issuer data', () => {
+    const v = computeValuation([
+      { seriesId: 's.ivv', fund: 'IVV', asOf: '2026-10-09', values: { pe_trailing: 29.6, pb: 5.7 } },
+      { seriesId: 's.spy', fund: 'SPY', asOf: '2026-10-13', values: { pe_fy1: 20.8, pb: 5.9 } },
+    ], '2026-10-13')
+    expect(v.measures).toEqual({ val_pe_trailing: 29.6, val_pb: 5.7, val_pe_fy1: 20.8 })
+    expect(v.sources.find(s => s.measureKey === 'val_pe_fy1')?.seriesId).toBe('s.spy')
+    expect(v).toMatchObject({ status: 'ok', asOf: '2026-10-09', staleDays: 4 })
+    expect(computeValuation([{ seriesId: 's', fund: 'X', asOf: '2026-09-01', values: { pb: 1 } }], '2026-10-13').status).toBe('stale')
+    expect(computeValuation([], '2026-10-13').status).toBe('missing')
+  })
+})
+
 describe('global map memory catalog', () => {
   it('lists every economic asset before its series, with economic classes and stable derived ids', () => {
     const universe = JSON.parse(readFileSync(new URL('../../../default/skills/alice-analysis/references/global-map-universe.json', import.meta.url), 'utf8'))
@@ -158,6 +184,7 @@ describe('global map memory catalog', () => {
     const firstSeries = entries.findIndex(e => e.role !== 'asset')
     expect(entries.slice(firstSeries).every(e => e.role !== 'asset')).toBe(true)
     expect(entries.filter(e => e.role === 'asset')).toHaveLength(65)
+    expect(entries.filter(e => String(e.entityId).startsWith('series.valuation.eq') || String(e.entityId).startsWith('series.valuation.s'))).toHaveLength(23)
     expect(entries.filter(e => e.role === 'asset').every(e => !('source' in e) && !('method' in e))).toBe(true)
     const byId = new Map(entries.map(e => [e.entityId, e]))
     expect(byId.get('series.vol.vix.yahoo')).toMatchObject({ assetClass: 'volatility', assetId: 'asset.vol.vix' })

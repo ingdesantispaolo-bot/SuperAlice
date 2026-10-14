@@ -339,6 +339,9 @@ const DEFS = {
   yoy_pct: 'Variazione % su 12 mesi', mom_pct: 'Variazione % sul mese precedente',
   rs_1m_eur_pp: 'Forza relativa a 1 mese in EUR rispetto al riferimento del gruppo (punti %)',
   rs_3m_eur_pp: 'Forza relativa a 3 mesi in EUR (punti %)', rs_12m_eur_pp: 'Forza relativa a 12 mesi in EUR (punti %)',
+  val_pe_trailing: "P/E sugli utili degli ultimi 12 mesi del fondo di riferimento, come pubblicato dall'emittente",
+  val_pe_fy1: "P/E sugli utili attesi del prossimo anno fiscale (FY1) del fondo di riferimento, come pubblicato dall'emittente",
+  val_pb: "Prezzo / valore di libro del fondo di riferimento, come pubblicato dall'emittente",
 }
 
 export function measureCatalog(entries) {
@@ -347,7 +350,7 @@ export function measureCatalog(entries) {
     if (e.status === 'missing' || e.status === 'gap') continue
     for (const measureKey of Object.keys(e.measures)) {
       measures.push({
-        assetId: e.assetId, measureKey, timeframe: e.frequency === 'monthly' ? '1M' : '1D', seriesId: e.seriesId,
+        assetId: e.assetId, measureKey, timeframe: e.frequency === 'monthly' ? '1M' : '1D', seriesId: e.measureSeries?.[measureKey] ?? e.seriesId,
         unit: unitOf(e, measureKey), definition: DEFS[measureKey] ?? measureKey, completedBarsOnly: true,
       })
     }
@@ -358,6 +361,7 @@ export function measureCatalog(entries) {
 function unitOf(e, key) {
   if (key.endsWith('_pct') || key.endsWith('_pct_eur') || key === 'vol20_ann_pct') return '%'
   if (key.endsWith('_pp')) return 'pp'
+  if (key.startsWith('val_')) return 'ratio'
   if (key.startsWith('trend_')) return 'state'
   if (key === 'rsi14' || key.includes('pctile')) return 'score'
   if (key === 'z20') return 'sd'
@@ -368,12 +372,70 @@ function unitOf(e, key) {
   return e.kind === 'fx' || e.kind === 'price-ratio' ? 'index' : (e.currency ?? 'index')
 }
 
+// ---------------------------------------------------------------- valuations
+
+const MONTHS = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' }
+const isoFromText = (mon, day, year) => (MONTHS[mon] ? `${year}-${MONTHS[mon]}-${String(day).padStart(2, '0')}` : null)
+
+/**
+ * Extract issuer-published fund fundamentals from a product page. Returns the
+ * verbatim page fragments (kept as evidence) and the parsed values.
+ */
+export function extractValuation(provider, html) {
+  if (provider === 'ishares') {
+    const text = html.replaceAll('&quot;', '"')
+    const fragments = {}, values = {}
+    let asOf = null
+    for (const [key, measure] of [['priceEarnings', 'pe_trailing'], ['priceBook', 'pb']]) {
+      const m = new RegExp(`"${key}":\\{"visible":(?:true|false),"label":"[^"]*","formattedValue":"([^"]*)"[^{}]*?"formattedAsOfDate":"([A-Z][a-z]{2}) (\\d{1,2}), (\\d{4})"`).exec(text)
+      if (!m) continue
+      fragments[key] = m[0].replace(/"infoBubble":"[^"]*",?/, '')
+      const value = Number(m[1].replace(/,/g, ''))
+      if (Number.isFinite(value) && m[1] !== '') values[measure] = value
+      asOf = asOf ?? isoFromText(m[2], m[3], m[4])
+    }
+    return { asOf, values, fragments }
+  }
+  if (provider === 'ssga') {
+    const fragments = {}, values = {}
+    for (const [label, measure] of [['Price/Earnings Ratio FY1', 'pe_fy1'], ['Price/Book Ratio', 'pb']]) {
+      const i = html.indexOf(`&#xfeff;${label}<`)
+      if (i < 0) continue
+      const window = html.slice(i, i + 3000)
+      const m = />\s*(-?[0-9][0-9,]*\.[0-9]+)\s*</.exec(window)
+      if (!m) continue
+      fragments[label] = window.slice(0, m.index + m[0].length).replace(/<[^>]*>/g, '|').replace(/\s+/g, ' ').slice(-200)
+      values[measure] = Number(m[1].replace(/,/g, ''))
+    }
+    const at = html.indexOf('&#xfeff;Price/Book Ratio<')
+    const d = at > 0 ? /as of ([A-Z][a-z]{2}) (\d{1,2}) (\d{4})/.exec(html.slice(html.lastIndexOf('as of', at), at)) : null
+    return { asOf: d ? isoFromText(d[1], d[2], d[3]) : null, values, fragments }
+  }
+  throw new Error(`Unknown valuation provider: ${provider}`)
+}
+
+/** Valuation measures for one asset from its issuer payloads (already extracted). */
+export function computeValuation(payloads, asOf) {
+  const measures = {}, sources = []
+  for (const p of payloads) {
+    for (const [k, v] of Object.entries(p.values)) {
+      const key = `val_${k}`
+      if (!(key in measures)) { measures[key] = v; sources.push({ measureKey: key, seriesId: p.seriesId, fund: p.fund, asOf: p.asOf }) }
+    }
+  }
+  const dates = sources.map(s => s.asOf).filter(Boolean).sort()
+  const oldest = dates[0] ?? null
+  const staleDays = oldest ? daysBetween(oldest, asOf) : null
+  return { status: !sources.length ? 'missing' : staleDays === null || staleDays > 10 ? 'stale' : 'ok', asOf: oldest, staleDays, measures, sources }
+}
+
 // ---------------------------------------------------------------- memory catalog
 
 const SOURCE_LABEL = {
   yahoo: 'Yahoo Finance via OpenAlice market bars', fred: 'FRED via OpenAlice TraderHub', 'traderhub-valuation': 'OpenAlice TraderHub valuation board',
   bundesbank: 'Deutsche Bundesbank statistics API', 'mof-jgb': 'Japan Ministry of Finance JGB interest rates', stoxx: 'STOXX historical index data',
   monitor: 'IbIvMonitor daily archive (IBKR)', derived: 'SuperAI global map, derived from registered series',
+  ishares: 'iShares (BlackRock) US product page', ssga: 'SPDR (State Street) US product page',
 }
 const RAW_UNIT = { rate: '%', yield: '%', spread: '%', level: 'index points', index: 'index points', ratio: 'ratio', fx: 'exchange rate' }
 const PAR_SOURCES = new Set(['fred', 'bundesbank', 'mof-jgb'])
@@ -411,6 +473,15 @@ export function catalogEntries(universe) {
       method: method(`${m.frequency === 'monthly' ? 'Monthly' : 'Daily'} series.`),
       yieldType: m.kind === 'yield' ? (m.frequency === 'monthly' ? 'unknown' : 'par') : null,
       benchmarkEquivalence: 'not-established', availability: 'source-verified',
+    })
+  }
+  for (const v of universe.valuations ?? []) {
+    const owner = universe.assets.find(a => a.assetId === v.assetId)
+    series.push({
+      kind: 'catalog', entityId: v.seriesId, label: `${owner.label}: fondamentali del fondo ${v.fund} (${v.provider === 'ishares' ? 'iShares' : 'SPDR'})`,
+      assetClass: owner.assetClass, role: 'proxy', assetId: v.assetId, source: SOURCE_LABEL[v.provider], sourceSeriesId: v.url,
+      currency: null, unit: 'ratio', method: method(`Issuer-published fund fundamentals (${v.fields.join(', ')}), read from the product page; values as of the page date.`),
+      yieldType: null, benchmarkEquivalence: 'not-established', availability: 'source-verified',
     })
   }
   for (const d of universe.derived) {
@@ -464,6 +535,16 @@ export function renderTables(metrics) {
         const cu = r.status === 'gap' ? '' : (LEVEL_KINDS[r.kind]?.changeUnit ?? '')
         out.push(`| ${r.label}${r.frequency === 'monthly' ? ' (mensile)' : ''} | ${fmt(m.last, unit === 'bp' ? 0 : 2)}${unit && m.last !== undefined && m.last !== null ? ` ${unit}` : ''} | ${shortDate(r.lastDate)} | ${fmt(m.chg_1w, 0, true)} | ${fmt(m.chg_1m, 0, true)} | ${fmt(m.chg_3m, 0, true)} | ${fmt(m.chg_12m, 0, true)}${cu ? ` ${cu}` : ''} | ${fmt(m.level_pctile_5y, 0)} | ${arrow(m.trend_short)} ${arrow(m.trend_medium)} ${arrow(m.trend_long)} | ${quality(r)} |`)
       }
+    }
+  }
+  const valued = metrics.assets.filter(a => a.valuation)
+  if (valued.length) {
+    out.push('', '### Valutazioni (fondi di riferimento, dati degli emittenti)', '', '| Voce | Fondo | P/E 12 mesi | P/E atteso | P/B | Dato al | Qualità |', '|---|---|---:|---:|---:|---|---|')
+    for (const a of valued) {
+      const v = a.valuation, m = a.measures
+      const funds = [...new Set(v.sources.map(x => x.fund))].join(', ')
+      const q = v.status === 'ok' ? 'ok' : v.status === 'stale' ? `vecchio (${v.staleDays} g)` : 'mancante'
+      out.push(`| ${a.label} | ${funds || '–'} | ${fmt(m.val_pe_trailing, 1)} | ${fmt(m.val_pe_fy1, 1)} | ${fmt(m.val_pb, 2)} | ${shortDate(v.asOf)} | ${q} |`)
     }
   }
   const derived = all.filter(r => r.assetId.startsWith('derived.'))
