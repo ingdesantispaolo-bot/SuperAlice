@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises'
-import { isAbsolute, join, relative } from 'node:path'
+import { readFile, realpath, rename, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { gunzipSync } from 'node:zlib'
+import { isInside, safeDir, workspaceRoot } from './global-map-io.mjs'
 import {
   METHOD_VERSION, applyRelative, computeSeries, computeValuation, deriveSeries, measureCatalog, parseSeries, renderTables,
 } from './global-map-lib.mjs'
@@ -16,11 +18,9 @@ for (let i = 0; i < args.length; i++) {
 const runId = options['--run-id'], asOf = options['--as-of']
 if (!runId || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/.test(runId) || !/^\d{4}-\d{2}-\d{2}$/.test(asOf ?? '')) throw new Error(usage)
 
-const root = await realpath(process.cwd())
-await realpath(join(root, '.alice'))
+const root = await workspaceRoot()
 const runDir = await realpath(join(root, 'research/market-assistant/runs', runId))
-const inside = (base, target) => { const r = relative(base, target); return !r.startsWith('..') && !isAbsolute(r) }
-if (!inside(root, runDir)) throw new Error('Run directory escaped the Workspace')
+if (!isInside(root, runDir)) throw new Error('Run directory escaped the Workspace')
 
 const manifest = JSON.parse(await readFile(join(runDir, 'global-map.manifest.json'), 'utf8'))
 if (manifest.schema !== 'superai.global-map.manifest/1' || manifest.runId !== runId) throw new Error('Unexpected manifest')
@@ -33,10 +33,11 @@ const payloadText = new Map()
 for (const p of manifest.payloads) {
   if (p.status !== 'ok') continue
   // Payloads live in the Workspace's temporary cache (content-addressed by SHA-256).
-  if (!/^research\/market-assistant\/global-map\/cache\/payloads\/[a-f0-9]{64}\.txt$/.test(p.file)) throw new Error(`Unexpected payload path: ${p.file}`)
+  if (!/^research\/market-assistant\/global-map\/cache\/payloads\/[a-f0-9]{64}\.txt(\.gz)?$/.test(p.file)) throw new Error(`Unexpected payload path: ${p.file}`)
   const path = join(root, p.file)
-  if (!inside(root, await realpath(path).catch(() => { throw new Error(`Payload no longer cached: ${p.file}`) }))) throw new Error('Payload escaped the Workspace')
-  const bytes = await readFile(path)
+  if (!isInside(root, await realpath(path).catch(() => { throw new Error(`Payload no longer cached: ${p.file}`) }))) throw new Error('Payload escaped the Workspace')
+  const stored = await readFile(path)
+  const bytes = p.file.endsWith('.gz') ? gunzipSync(stored, { maxOutputLength: 40_000_000 }) : stored
   if (createHash('sha256').update(bytes).digest('hex') !== p.sha256) throw new Error(`Evidence integrity mismatch: ${p.file}`)
   payloadText.set(p.key, { text: bytes.toString('utf8'), fetchedAt: p.fetchedAt })
 }
@@ -99,7 +100,7 @@ for (const a of assets) {
   const payloads = (universe.valuations ?? []).filter(v => v.assetId === a.assetId).map(v => valuationPayloads.get(v.seriesId)).filter(Boolean)
   if (!(universe.valuations ?? []).some(v => v.assetId === a.assetId)) continue
   const v = computeValuation(payloads, asOf)
-  a.valuation = { status: v.status, asOf: v.asOf, staleDays: v.staleDays, sources: v.sources }
+  a.valuation = { status: v.status, asOf: v.asOf, staleDays: v.staleDays, sources: v.sources, excluded: v.excluded }
   Object.assign(a.measures, v.measures)
   a.measureSeries = Object.fromEntries(v.sources.map(x => [x.measureKey, x.seriesId]))
 }
@@ -129,8 +130,7 @@ await write('global-map.tables.md', renderTables(metrics))
 
 if (options.publish) {
   // Publish the measure catalog used to validate thesis conditions (atomic replace).
-  const dir = join(root, 'research/market-assistant/global-map')
-  await mkdir(dir, { recursive: true })
+  const dir = await safeDir(root, 'research/market-assistant/global-map')
   const temp = join(dir, `.measures.${process.pid}.tmp`)
   await writeFile(temp, JSON.stringify(catalog, null, 2) + '\n', { flag: 'wx' })
   await rename(temp, join(dir, 'measures.json'))

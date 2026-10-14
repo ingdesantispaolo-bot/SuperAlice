@@ -62,7 +62,8 @@ Caveats belong here, not on the first page.
 
 On a scheduled weekly review:
 
-1. Register the run's `global-map.metrics.json` as evidence (`alice memory record`,
+1. Pin the run (`global-map-pin.mjs`) so its raw inputs survive pruning, then
+   register its `global-map.metrics.json` as evidence (`alice memory record`,
    kind `evidence`) and use its event id as `metricsEvidenceId`.
 2. Record one `judgment` per asset and horizon you assess, with the group id of
    the universe and the observations you cite.

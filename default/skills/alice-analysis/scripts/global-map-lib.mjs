@@ -416,8 +416,10 @@ export function extractValuation(provider, html) {
 
 /** Valuation measures for one asset from its issuer payloads (already extracted). */
 export function computeValuation(payloads, asOf) {
-  const measures = {}, sources = []
+  const measures = {}, sources = [], excluded = []
   for (const p of payloads) {
+    // A value published after the map's cutoff was not knowable then: never use it.
+    if (p.asOf && p.asOf > asOf) { excluded.push({ seriesId: p.seriesId, fund: p.fund, asOf: p.asOf, reason: 'after-cutoff' }); continue }
     for (const [k, v] of Object.entries(p.values)) {
       const key = `val_${k}`
       if (!(key in measures)) { measures[key] = v; sources.push({ measureKey: key, seriesId: p.seriesId, fund: p.fund, asOf: p.asOf }) }
@@ -426,7 +428,7 @@ export function computeValuation(payloads, asOf) {
   const dates = sources.map(s => s.asOf).filter(Boolean).sort()
   const oldest = dates[0] ?? null
   const staleDays = oldest ? daysBetween(oldest, asOf) : null
-  return { status: !sources.length ? 'missing' : staleDays === null || staleDays > 10 ? 'stale' : 'ok', asOf: oldest, staleDays, measures, sources }
+  return { status: !sources.length ? 'missing' : staleDays === null || staleDays > 10 ? 'stale' : 'ok', asOf: oldest, staleDays, measures, sources, excluded }
 }
 
 // ---------------------------------------------------------------- memory catalog

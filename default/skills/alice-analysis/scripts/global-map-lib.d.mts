@@ -34,4 +34,5 @@ export function extractValuation(provider: 'ishares' | 'ssga' | string, html: st
 export function computeValuation(payloads: Array<{ seriesId: string; fund: string; asOf: string | null; values: Record<string, number> }>, asOf: string): {
   status: 'ok' | 'stale' | 'missing'; asOf: string | null; staleDays: number | null; measures: Record<string, number>
   sources: Array<{ measureKey: string; seriesId: string; fund: string; asOf: string | null }>
+  excluded: Array<{ seriesId: string; fund: string; asOf: string; reason: string }>
 }

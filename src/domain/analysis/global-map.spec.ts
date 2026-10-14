@@ -1,10 +1,14 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { mkdtemp, readdir, realpath, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   applyRelative, catalogEntries, computeSeries, computeValuation, extractValuation, deriveSeries, eurFactor, measureCatalog, parseSeries, renderTables,
   rsiWilder, shiftDate, valueAt, type MapEntry, type Point,
 } from '../../../default/skills/alice-analysis/scripts/global-map-lib.mjs'
+import { readLimited, safeDir } from '../../../default/skills/alice-analysis/scripts/global-map-io.mjs'
 
 /** Weekday series from start, one point per business day, value from f(i). */
 function weekdays(start: string, count: number, f: (i: number) => number): Point[] {
@@ -174,6 +178,31 @@ describe('global map valuations', () => {
     expect(v).toMatchObject({ status: 'ok', asOf: '2026-10-09', staleDays: 4 })
     expect(computeValuation([{ seriesId: 's', fund: 'X', asOf: '2026-09-01', values: { pb: 1 } }], '2026-10-13').status).toBe('stale')
     expect(computeValuation([], '2026-10-13').status).toBe('missing')
+  })
+
+  it('never uses issuer values published after the map cutoff', () => {
+    const v = computeValuation([{ seriesId: 's.late', fund: 'SPY', asOf: '2026-10-14', values: { pe_fy1: 20 } }], '2026-10-13')
+    expect(v).toMatchObject({ status: 'missing', measures: {}, excluded: [{ seriesId: 's.late', reason: 'after-cutoff' }] })
+  })
+})
+
+describe('global map workspace I/O', () => {
+  it('creates directories component by component and refuses a linked parent', async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'gm-io-')))
+    const made = await safeDir(root, 'research/market-assistant/runs')
+    expect(made).toBe(join(root, 'research', 'market-assistant', 'runs'))
+    await expect(safeDir(root, 'research/market-assistant/runs', { exclusiveLast: true })).rejects.toThrow('already exists')
+    const outside = await mkdtemp(join(tmpdir(), 'gm-out-'))
+    await symlink(outside, join(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir')
+    await expect(safeDir(root, 'linked/runs')).rejects.toThrow('Unsafe path component')
+    expect(await readdir(outside)).toEqual([])
+    await expect(safeDir(root, '../escape')).rejects.toThrow('Unsafe directory')
+  })
+
+  it('stops reading a response above the byte ceiling', async () => {
+    await expect(readLimited(new Response('x'.repeat(100)), 50)).rejects.toThrow('exceeds 50 bytes')
+    await expect(readLimited(new Response('ok', { headers: { 'content-length': '999' } }), 50)).rejects.toThrow('exceeds')
+    expect(await readLimited(new Response('ok'), 50)).toBe('ok')
   })
 })
 

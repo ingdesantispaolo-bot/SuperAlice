@@ -29,11 +29,16 @@ MOF and STOXX files from their official URLs. The default window is six years,
 enough for every current measure. It creates `research/market-assistant/runs/<runId>/`
 exclusively with a copy of the universe and `global-map.manifest.json`.
 
-Original payloads go to `research/market-assistant/global-map/cache/payloads/<sha256>.txt`,
-a temporary cache excluded from Workspace Git: identical payloads are stored
-once, and only those of the five latest runs and of Saturday runs from the last
-five weeks are kept. Older runs keep their metrics but can no longer be
-recalculated. This cache disappears when IbIvMonitor persists external series
+Original payloads go to `research/market-assistant/global-map/cache/payloads/<sha256>.txt.gz`
+(gzip; the hash is of the uncompressed payload), a temporary cache excluded from
+Workspace Git. Identical payloads are stored once. Only the payloads of the five
+latest runs and of pinned runs are kept; other runs keep their metrics but can no
+longer be recalculated. Pin every run whose metrics support a report, judgment or
+thesis:
+
+```bash
+node .agents/skills/alice-analysis/scripts/global-map-pin.mjs --run-id <id> --reason "weekly review"
+``` This cache disappears when IbIvMonitor persists external series
 (request SUPERAI-EXTERNAL-SERIES-01); IbIvMonitor owns long-term persistence. Exit code 2 means some payloads failed: the run is
 still valid and the failures are listed; do not retry in a loop. It never opens
 an IBKR connection and never starts monitor history jobs.
