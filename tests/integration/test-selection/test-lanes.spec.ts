@@ -192,7 +192,8 @@ describe('composable selection contract', () => {
 
 describe('risk and side-effect boundary contract', () => {
   it('keeps deterministic, external read-only, live-paper, and system specs distinct', () => {
-    expect(integrationIncludes).toHaveLength(5)
+    expect(integrationIncludes).toHaveLength(6)
+    expect(integrationIncludes).toContain('tests/integration/market-memory-cli/memory.spec.ts')
     expect(externalReadonlyIncludes.length).toBeGreaterThan(2)
     expect(livePaperIncludes.length).toBeGreaterThan(0)
 
