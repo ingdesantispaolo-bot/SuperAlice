@@ -6,7 +6,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { CallToolResult, Tool as McpTool } from '@modelcontextprotocol/sdk/types.js'
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { MONITOR_MCP_COMMANDS, MONITOR_EVIDENCE_KEY } from './monitor-mcp-catalog.js'
+import { assertMonitorMcpCatalog, MONITOR_EVIDENCE_KEY } from './monitor-mcp-catalog.js'
 import { monitorInputSchema } from './monitor-mcp-schema.js'
 export { MONITOR_MCP_COMMANDS, MONITOR_EVIDENCE_KEY } from './monitor-mcp-catalog.js'
 
@@ -71,9 +71,7 @@ export class MonitorMcpClient {
     try {
       await client.connect(transport, { timeout: 20_000 })
       const { tools, nextCursor } = await client.listTools({}, { timeout: 20_000 })
-      const allowed = new Set<string>(Object.values(MONITOR_MCP_COMMANDS))
-      if (nextCursor || tools.length !== allowed.size || new Set(tools.map(t => t.name)).size !== allowed.size
-        || tools.some(t => !allowed.has(t.name))) throw new Error('Monitor MCP tool contract differs from the reviewed 20 tools')
+      assertMonitorMcpCatalog(tools.map(t => t.name), nextCursor)
       const schemas = new Map<string, z.ZodObject>()
       for (const definition of tools) {
         const schema = monitorInputSchema(definition.inputSchema)

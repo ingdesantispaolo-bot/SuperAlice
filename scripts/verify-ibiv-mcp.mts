@@ -22,7 +22,7 @@ await writeFile(join(config, 'config.json'), JSON.stringify({ DataDirectory: sql
   IbHost: '127.0.0.1', IbPort: 1, IbClientId: 991, AutoReconnect: false, MacroAutoStart: false,
   AnalystAutoStart: false, CalendarEnabled: false, NewsEnabled: false, BackupEnabled: false,
   PredictionMarketsEnabled: false, MonitorBridgeEnabled: true, MonitorBridgeDirectory: archive,
-  McpServerEnabled: true, McpAllowDataRequests: true }))
+  McpServerEnabled: true, McpAllowDataRequests: true, McpMaxGexMonitors: 1 }))
 await writeFile(join(archive, 'service-policy.json'), JSON.stringify({ mode: 'research',
   plan: monitorPlanSchema.parse({ gexWindowSeconds: 0, backfillDaily: false }) }))
 const client = new MonitorMcpClient({ executable, directory: archive, configDirectory: config, mcpEnabled: '1' })
@@ -30,7 +30,7 @@ let child: ChildProcess | undefined, service: MonitorService | null = null
 let server: ReturnType<typeof serve> | undefined
 const checks: string[] = []
 const result: Record<string, unknown> = { startedAt: new Date().toISOString(),
-  scope: 'Actual SDK, 20 remote schemas, WPF controller and Project CLI; same user, isolated SQLite, closed port 1', checks }
+  scope: 'Actual SDK, 24 remote schemas, WPF controller and Project CLI; same user, isolated SQLite, closed port 1', checks }
 const delay = (ms: number) => new Promise(done => setTimeout(done, ms))
 async function call(name: string, args: Record<string, unknown> = {}) {
   const response = await client.call(name, args)
@@ -39,7 +39,7 @@ async function call(name: string, args: Record<string, unknown> = {}) {
 }
 try {
   const definitions = await client.discover()
-  assert.equal(definitions.length, 20); checks.push('20 tools discovered while monitor stopped')
+  assert.equal(definitions.length, 24); checks.push('24 tools discovered while monitor stopped')
   await writeFile(join(evidence, 'tools.json'), JSON.stringify(definitions, null, 2))
   assert.equal((await call('monitor_status')).payload.running, false); checks.push('offline status with verified evidence')
   assert.equal((await call('monitor_context')).response.isError, true); checks.push('offline tool error preserved')
@@ -53,7 +53,7 @@ try {
       env: { ...process.env, OPENALICE_CLI_BIN: 'alice', AQ_WS_ID: '', OPENALICE_TOOL_SOCKET: '',
         OPENALICE_PROJECT_ID: 'ibiv-probe', OPENALICE_TOOL_URL: `http://127.0.0.1:${port}/cli` } })
   const manifest = await app.request('/cli/project/data/manifest', { headers: { 'x-openalice-project': 'ibiv-probe' } })
-  assert.equal(Object.keys((await manifest.json()).groups.monitor).length, 20); checks.push('20 tools exposed through Project CLI')
+  assert.equal(Object.keys((await manifest.json()).groups.monitor).length, 24); checks.push('24 tools exposed through Project CLI')
   assert.ok((await cli(['monitor', 'history-request', '--help'])).stdout.includes('--years')); checks.push('live CLI schema discovery')
   service = await MonitorService.start({ directory: archive, executable, periodic: false, launch: exe => {
     child = spawn(exe, ['--background'], { windowsHide: true, stdio: 'ignore',
@@ -90,6 +90,8 @@ try {
     news_latest: { cursor: 0, limit: 20 },
     news_article: { provider: 'DJ-N', articleId: 'isolated-nonexistent' },
     news_stats: { from, to }, analyst_actions: { tickers: ['AAPL'], limit: 20 },
+    gex_profile: { underlying: 'AAPL' },
+    gex_monitor_start: { symbol: 'AAPL', secType: 'STK' }, gex_monitor_stop: { symbol: 'AAPL' },
   }
   for (const name of Object.values(MONITOR_MCP_COMMANDS)) {
     const read = await call(name, argumentsByName[name] ?? {})
@@ -99,6 +101,22 @@ try {
     if (name === 'news_article') assert.equal(read.response.isError, true)
     checks.push(`${name}: canonical evidence verified`)
   }
+  assert.equal((await call('gex_monitor_start', { symbol: 'AAPL', secType: 'STK' })).payload.status, 'started')
+  assert.equal((await call('gex_monitor_start', { symbol: 'AAPL', secType: 'STK' })).payload.status, 'already-requested')
+  assert.equal((await call('gex_monitors')).payload.requested.count, 1)
+  assert.equal((await call('gex_monitor_start', { symbol: 'MSFT', secType: 'STK' })).response.isError, true)
+  assert.equal((await call('gex_monitor_stop', { symbol: 'SPX' })).response.isError, true)
+  assert.equal((await call('gex_profile', { underlying: 'AAPL' })).payload.error, 'insufficient_data')
+  await assert.rejects(client.call('gex_profile', { underlying: 'AAPL', maxBars: 5001 }))
+  await assert.rejects(client.call('gex_monitor_start', { symbol: 'AAPL', secType: 'BAG', account: 'forbidden' }))
+  assert.equal((await call('gex_monitor_stop', { symbol: 'AAPL' })).payload.status, 'stopped')
+  assert.equal((await call('gex_monitors')).payload.requested.count, 0)
+  checks.push('GEX idempotency, operator limit, protected family, missing profile and bounded schemas')
+  const gexSaved = join(evidence, 'cli-gex.json')
+  await cli(['monitor', 'gex-profile', '--underlying', 'SPX', '--max-bars', '5', '--help'])
+  await cli(['monitor', 'gex-monitors', '--output', gexSaved])
+  assert.ok(JSON.parse(await readFile(gexSaved, 'utf8'))._meta['ibivmonitor/sha256'])
+  checks.push('GEX commands and canonical evidence exposed through real CLI')
   const saved = join(evidence, 'cli-daily.json')
   await cli(['monitor', 'history-daily', '--id', id, '--limit', '300', '--from', from, '--output', saved])
   assert.ok(JSON.parse(await readFile(saved, 'utf8'))._meta['ibivmonitor/sha256'])

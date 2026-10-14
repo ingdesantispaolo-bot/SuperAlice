@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { MonitorMcpClient, verifyMonitorMcpEvidence } from './monitor-mcp.js'
 import { monitorInputSchema } from './monitor-mcp-schema.js'
+import { assertMonitorMcpCatalog, MONITOR_MCP_COMMANDS } from './monitor-mcp-catalog.js'
 import { extractMcpShape, wrapToolExecute } from '../../core/mcp-export.js'
 import { tool } from 'ai'
 import { z } from 'zod'
@@ -10,6 +11,23 @@ import { z } from 'zod'
 const text = '{ "schema":"ibivmonitor.context/1", "sourceAt":"2026-10-13T12:00:00Z" }'
 const evidence = (): CallToolResult => ({ content: [{ type: 'text', text }], structuredContent: JSON.parse(text),
   _meta: { 'ibivmonitor/sha256': createHash('sha256').update(text).digest('hex') } })
+
+describe('reviewed monitor MCP catalog', () => {
+  const names = Object.values(MONITOR_MCP_COMMANDS)
+  it('accepts all 24 reviewed research tools including GEX acquisition', () => {
+    expect(names).toHaveLength(24)
+    expect(() => assertMonitorMcpCatalog([...names].reverse())).not.toThrow()
+    expect(MONITOR_MCP_COMMANDS['gex-monitor-start']).toBe('gex_monitor_start')
+    expect(MONITOR_MCP_COMMANDS['gex-monitor-stop']).toBe('gex_monitor_stop')
+  })
+  it('rejects missing, duplicate, unreviewed and paginated catalogs', () => {
+    for (const invalid of [names.slice(0, 20), [...names, 'order_place'],
+      [...names.slice(1), names[1]], [...names.slice(1), 'order_place']]) {
+      expect(() => assertMonitorMcpCatalog(invalid)).toThrow('reviewed 24 tools')
+    }
+    expect(() => assertMonitorMcpCatalog(names, 'more')).toThrow('reviewed 24 tools')
+  })
+})
 
 describe('IbIvMonitor MCP evidence boundary', () => {
   it('preserves canonical bytes and metadata through the shared MCP exporter', async () => {

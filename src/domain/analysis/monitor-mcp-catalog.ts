@@ -10,5 +10,16 @@ export const MONITOR_MCP_COMMANDS = {
   'news-search': 'news_search', 'news-latest': 'news_latest',
   'news-article': 'news_article', 'news-stats': 'news_stats',
   'analyst-actions': 'analyst_actions',
+  'gex-profile': 'gex_profile', 'gex-monitors': 'gex_monitors',
+  'gex-monitor-start': 'gex_monitor_start', 'gex-monitor-stop': 'gex_monitor_stop',
 } as const
+
+/** Exact reviewed names: acquisition remains bounded by the monitor's operator policy. */
+export function assertMonitorMcpCatalog(names: readonly string[], nextCursor?: string): void {
+  const allowed = new Set<string>(Object.values(MONITOR_MCP_COMMANDS))
+  if (nextCursor || names.length !== allowed.size || new Set(names).size !== allowed.size
+    || names.some(name => !allowed.has(name))) {
+    throw new Error(`Monitor MCP tool contract differs from the reviewed ${allowed.size} tools`)
+  }
+}
 export const MONITOR_EVIDENCE_KEY = 'ibivmonitor/sha256'

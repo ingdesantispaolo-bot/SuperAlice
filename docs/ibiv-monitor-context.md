@@ -10,7 +10,7 @@ monitor is stopped and reconnects to its same-data-directory pipe on subsequent
 calls. Both processes must run as the same Windows user at the same elevation:
 the pipe is CurrentUserOnly. Acquisition lifecycle stays with MonitorService.
 
-The reviewed 20-tool catalog appears in ToolCenter as `ibiv_<remote_name>` and
+The reviewed 24-tool catalog appears in ToolCenter as `ibiv_<remote_name>` and
 under `alice monitor`. Schemas and descriptions come from tools/list; new or
 missing tool names fail contract discovery. Unknown arguments and numeric limits
 are validated; the monitor remains the final authority for its schema. Transport
@@ -54,9 +54,20 @@ requested in the monitor repository. The producer contract is
 Native acceptance: `scripts/verify-ibiv-mcp.mts`, registered system integration,
 uses actual SDK, WPF executable, controller and Project CLI under one OS user,
 isolated databases, closed port 1/client 991, no orders or model calls. It checks
-all 20 tools, canonical evidence, stopped→running→stopped reconnection, numeric
+all 24 tools, canonical evidence, stopped→running→stopped reconnection, numeric
 CLI flags and evidence file delivery. Set `IBIV_MONITOR_PROBE_EXE` to the built
 MCP executable. This does not certify live IBKR coverage or research usefulness.
+
+The four GEX commands are `gex-profile`, `gex-monitors`, `gex-monitor-start`
+and `gex-monitor-stop`. Start/stop manage research option-chain subscriptions
+inside the existing monitor, not OS processes or trading. They respect
+`McpAllowDataRequests`, the operator's `McpMaxGexMonitors` limit (default four),
+manual priority and the controller's periodic GEX windows. MCP-created rows are
+temporary; stop only releases MCP-requested chains and cannot stop user-owned
+monitors or the SPX/NDX families. A repeated start is idempotent. Alice never
+replays an in-flight start/stop on transport loss. Native acceptance also checks
+idempotency, the configured limit, protected family and profile/schema bounds
+with TWS unreachable; live Greek coverage remains a separate acceptance.
 
 Acquisition control added 2026-10-13: Alice can supervise the existing IbIvMonitor executable in background with an operator-owned executable path and a bounded file lease. `alice analysis monitor-service-status`, `monitor-service-set` and `monitor-history` expose acquisition status, research-only policy and hash-verified exported daily cache. This adds data collection writes; the original `monitor-context` remains file-only read. UTA authority is unchanged.
 
