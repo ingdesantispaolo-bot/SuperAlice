@@ -84,8 +84,20 @@ Shared-file changes and contract clarifications are announced there first.
   projection/reference closure resolved them. Cap is now 100,000 events/512 MB.
   Five index assertions pass, including corruption and reconstruction equality;
   context/CLI regressions and app/test typechecks accompany the commit.
-- [ ] X5-X7: confirmed signal ingestion, managed guidance in all three desks,
-  and the monitor owner's read-only external-series/thesis contract.
+- [ ] X5 real-control acceptance: source publication/idempotency is implemented
+  and verified (41 domain/tool assertions, three real CLI/HTTP/Git tests including
+  two identical helper publications). Stable episode identities preserve original
+  confirmation/expiry/source references. Candidates are refused. Real native
+  scheduled-control recording and legacy confirmation reconciliation remain.
+- [ ] X6 managed rollout: source bundle 1.0.10 and Chat 1.8.14 require context
+  before interpretation, candidate chat theses and explicit user attribution.
+  Ten existing harness/template assertions and app/test typechecks pass. Three
+  desk adoption and three Issue What updates are prepared; schedules/owner stay.
+- [ ] X7 producer dependency: SUPERAI-EXTERNAL-SERIES-01 was forwarded verbatim
+  to the monitor coordination file on G:, extending SUPERAI-MEMORY-READONLY-01.
+  The owner has a historical archive study, but the requested external-series
+  and monitor-analyst read-only contracts are not yet delivered. No direct DB
+  access or C# change is performed. Receipt external-series-forwarded.json.
 
 X1/X2 verification: 32 domain/tool assertions including one 500-result nightly
 check; 97 targeted CLI/export/catalog assertions before the final C2 additions;
