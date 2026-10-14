@@ -41,3 +41,89 @@ offline copies, reconciliation, BTP identity, corruption/locks and budgets.
 Registered market-memory-cli uses production HTTP/CLI/file modules and isolated
 state; no monitor, broker, model or production-source readiness claim. It verifies
 default scope, same-Project read-only owner and no Project memory commands.
+
+## Schema v2 writes and legacy replay
+
+New events use schemaVersion 2. The existing research/market-memory/v1 path is
+the archive namespace, not a claim that every event uses schema 1. Readers
+accept both versions and verify the original byte hashes and chain; there is
+no rewrite, invented author or backdated origin for legacy events.
+market-memory-schema.ts owns the wire shapes; market-memory-validation.ts
+owns the additional reference, clock and activation rules.
+
+An asset catalog entry uses entityId, label, assetClass and role: asset. It has
+no source, sourceSeriesId, method or parent assetId. New numeric series retain
+their source/method/unit fields and require assetId referring to a registered
+economic asset of the same assetClass. Legacy series remain unchanged. Numeric
+observations cite series; an asset thesis may cite observations from its series.
+
+Every thesis, signal, judgment and lesson requires author
+{type: superai|user|monitor-analyst, agent?: string}. The host supplies event
+origin {kind: session|issue|user-surface, workspaceId, resumeId?, issueId?}.
+Entry JSON cannot provide origin. For an Issue, the tool verifies the running
+registry task, its exact origin and the same Workspace's trigger. Review
+authority also requires a live Issue with a schedule, read through the board.
+A missing, completed, mismatched or unscheduled run cannot grant review authority.
+
+Thesis conditions refer to economic assets and the current Workspace's
+research/market-assistant/global-map/measures.json (superai.measures/1).
+The key, timeframe, series, unit and completedBarsOnly flag must match the
+catalog. Relative thresholds validate both measures. Retrieval never reads this
+live registry or re-evaluates historical conditions. A changed registry affects
+new writes, not old event hashes or historical query results.
+
+An active thesis requires activationBasis and an invalidation condition or a
+review condition with expiresAt. A chat cannot activate, even with an approval.
+A scheduled-review basis must name the host's scheduled Issue; author: user
+always requires a user-approval basis. User approval must target the exact
+current candidate, and the activating revision must preserve its content.
+The newest decision for that candidate wins; rejection revokes earlier consent.
+Approval records consent; the scheduled review writes the activating revision.
+
+check records one runId/evaluatedAt/metricsEvidenceId event for a control,
+with unique thesisEventId/conditionId results. Unknown references, future
+clocks, repeated runIds and unexplained not-evaluable results fail explicitly.
+signal requires confirmation and expiry at most seven days apart, cited
+observations or evidence, and related thesis event IDs; signalId is immutable
+and cannot be recorded twice. judgment cites a metrics evidence event and
+relevant observations; its reviewRunId/assetId/horizon combination is unique.
+
+lesson requires at least three distinct supporting event IDs, distinct counter
+examples and versioned previousEventId. Approved/retired revisions require the
+latest user approval of the exact preceding proposed/approved version, preserving
+statement, scope and supporting/counter examples. A changed rule is proposed
+again. Evidence referenced by new checks, signals and judgments is hash-verified
+before the event is committed.
+
+The context reader remains superai.market-context/1 until the X3 increment:
+v2 theses and authors are readable, but signal/check/judgment/lesson retrieval
+and derived condition states are not yet implemented. The 10,000-event cap
+remains; an index and incremental verification are the separate X4 increment.
+
+## User approval surface and isolation limit
+
+From the user's terminal, outside an Agent Session:
+
+```bash
+openalice exec --project <project-key> alice memory approve --workspace-id <desk-id> --target-event-id <candidate-event-hash> --decision approve --note "Reviewed this candidate"
+```
+
+Use decision reject to reject/revoke consent. The command records an immutable
+approval; it does not place orders, automatically activate a thesis or retire a
+lesson. The returned eventId is the activationBasis.approvalEventId for the
+scheduled review. Only current candidate theses and proposed/approved lessons
+are eligible. A superseded interpretation cannot be approved.
+
+The shim uses a dedicated /cli/:wsId/memory/approval route with server-resolved
+Workspace and user-surface origin. It is absent from all MCP tools, tool-center
+registrations and CLI tool manifests. market_memory_record rejects approval
+JSON. The user command and route reject Agent Session/run env/header carriers;
+the request cannot declare origin or a different write root. The explicit
+Project command resolves its local endpoint and the route checks its identity.
+
+These are behavior and workflow rules, not an OS security boundary. Agents and
+the user currently run with the same Windows user. An agent could clear its
+environment, send a bare local request, or edit files with that user's rights.
+Agents must never invoke the user approval surface or manufacture consent.
+Stronger enforcement requires a separately authenticated user surface or
+process/filesystem isolation, outside this increment.
