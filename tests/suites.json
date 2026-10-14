@@ -1,5 +1,15 @@
 [
   {
+    "id": "market-memory-cli",
+    "title": "Workspace market memory, offline context and CLI scope",
+    "tier": "integration",
+    "owner": "alice",
+    "lane": "integration",
+    "areas": ["market-data", "workspace"],
+    "files": ["tests/integration/market-memory-cli/memory.spec.ts"],
+    "scope": "Real local HTTP gateway, CLI child and isolated filesystem; scoped record/context without monitor, broker or model. No production-source readiness or investment efficacy claim."
+  },
+  {
     "id": "alice-uta",
     "title": "Alice to UTA carrier and trading permission",
     "tier": "integration",
@@ -102,6 +112,26 @@
       "open-alice#test:system:connector"
     ],
     "scope": "Dedicated existing acceptance runners; prerequisites, supported platforms and explicit arguments remain owned by each command. Never automatically executed by suite selection; listing is not acceptance."
+  },
+  {
+    "id": "ibiv-monitor-mcp",
+    "title": "IbIvMonitor MCP native acceptance",
+    "tier": "integration",
+    "owner": "alice",
+    "lane": "system",
+    "areas": ["market-data"],
+    "commands": ["ibiv-monitor-mcp"],
+    "scope": "Actual Windows WPF, SDK stdio relay, 20 tools and Project CLI under the same user with isolated databases and closed port 1. No live TWS, economic or trading acceptance."
+  },
+  {
+    "id": "ibiv-monitor-background",
+    "title": "IbIvMonitor background acquisition acceptance",
+    "tier": "integration",
+    "owner": "alice",
+    "lane": "system",
+    "areas": ["market-data"],
+    "commands": ["ibiv-monitor-background"],
+    "scope": "Windows-only actual WPF executable plus TypeScript file controller, isolated SQLite and closed port 1. Requires the built monitor executable. Verifies background entry, heartbeat, duplicate exclusion and graceful relinquishment; no TWS, trading, model or visible-shell interaction."
   },
   {
     "id": "desktop-acceptance",
@@ -584,9 +614,11 @@
     "files": [
       "tests/integration/cli-gateway/cli.spec.ts",
       "tests/integration/cli-gateway/project-cli.spec.ts",
-      "tests/integration/cli-gateway/cli-commands.spec.ts"
+      "tests/integration/cli-gateway/cli-commands.spec.ts",
+      "tests/integration/cli-gateway/monitor-context.spec.ts",
+      "tests/integration/cli-gateway/monitor-mcp.spec.ts"
     ],
-    "scope": "CLI gateway, real tool centers and local HTTP/CLI fixtures; Workspace services and external providers remain controlled."
+    "scope": "CLI gateway, real tool centers and local HTTP/CLI fixtures, including monitor acquisition and daily-archive commands; Workspace services and external providers remain controlled."
   },
   {
     "id": "connector-session-model",
