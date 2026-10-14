@@ -74,3 +74,15 @@ the library's `METHOD_VERSION` changes and comparisons restart from a new baseli
 
 Measures are descriptive. An RSI extreme, a ranking or a trend state is not a
 buy/sell signal, and this procedure authorizes research only, never orders.
+
+## Step 3: register the map in market memory (once per universe revision)
+
+```bash
+node .agents/skills/alice-analysis/scripts/global-map-register.mjs --dry-run
+node .agents/skills/alice-analysis/scripts/global-map-register.mjs
+```
+
+It derives catalog events from the universe (economic assets first, then their
+series with source, unit, method and yield type) and records only the missing
+ids through `alice memory`. Catalog identities are immutable: a changed source
+or method needs a new series id in the universe, never a rewrite.
