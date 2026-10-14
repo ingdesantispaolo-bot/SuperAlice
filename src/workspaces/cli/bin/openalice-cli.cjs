@@ -76,6 +76,32 @@ async function main() {
   // `<bin>` / `<bin> --help` -> group listing
   if (!group) return printGroups(await manifest(base))
 
+  // Operator surface, deliberately absent from the agent tool manifest.
+  if (BIN === 'alice' && group === 'memory' && verb === 'approve') {
+    if (process.env.AQ_RUN_ID || process.env.AQ_SESSION_ID) fail('Memory approval must come from the user terminal, outside an agent Session')
+    const schema = { type: 'object', properties: {
+      workspaceId: { type: 'string', description: 'Registered desk in the selected Project; defaults to the current Workspace.' },
+      targetEventId: { type: 'string', description: 'Exact current candidate thesis or lesson event hash.' },
+      decision: { type: 'string', enum: ['approve', 'reject'], description: 'Record user consent or rejection.' },
+      note: { type: 'string', description: 'Your reason for this decision.' },
+    }, required: ['targetEventId', 'decision', 'note'] }
+    if (wantsHelp) return printVerbHelp(group, verb, { schema, description: 'User approval only. Records a decision; the scheduled review applies activation. Not an agent tool.' })
+    const { workspaceId: selected, ...args } = await parseFlags(argv.slice(argv.indexOf(verb) + 1), schema, { group, verb })
+    const target = selected || wsId
+    if (!target || typeof target !== 'string') fail('Memory approval requires --workspace-id <desk-id> in the selected Project')
+    if (outputPath) {
+      const fs = await import('node:fs/promises')
+      try { await fs.lstat(outputPath); fail(`Output already exists: ${outputPath}`) }
+      catch (error) { if (error.code !== 'ENOENT') throw error }
+    }
+    const r = await fetchJson(gateway + '/' + encodeURIComponent(target) + '/memory/approval', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'approval', ...args }),
+    })
+    if (!r.ok) fail(r.body && r.body.error ? String(r.body.error) : `HTTP ${r.status}`)
+    const res = (r.body.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n')
+    return writeResponse(res, outputPath)
+  }
+
   const m = await manifest(base)
   const groupCmds = m.groups[group]
   if (!groupCmds) {
@@ -111,6 +137,10 @@ async function main() {
     catch (error) { if (error.code !== 'ENOENT') throw error }
   }
   const res = await invoke(base, cmd.tool, args)
+  return writeResponse(res, outputPath)
+}
+
+async function writeResponse(res, outputPath) {
   const output = res.endsWith('\n') ? res : res + '\n'
   if (outputPath) {
     // Exclusive creation avoids destroying an existing dataset on a typo.
@@ -264,12 +294,6 @@ async function parseFlags(tokens, schema, command) {
         i++
       }
     }
-    // JSON-looking values parse into objects/arrays so object flags work:
-    //   --takeProfit '{"price":"1725"}'
-    // Parse failures fall through as plain strings (gateway validates).
-    if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
-      try { val = JSON.parse(val) } catch { /* keep the raw string */ }
-    }
     // Shell-facing flags are kebab-case; tool schemas are commonly camelCase.
     // Preserve an exact schema key first (some data tools intentionally use
     // hyphenated keys), then normalize only when the camelCase key exists.
@@ -303,6 +327,11 @@ async function parseFlags(tokens, schema, command) {
           (recovery ? `${recovery}\n` : '') +
           `Run \`${BIN} ${command.group} ${command.verb} --help\` before retrying.`,
       )
+    }
+    // Preserve JSON-looking string arguments (entryJson/body) byte-for-byte.
+    // Object/array flags still parse JSON; the gateway validates their shape.
+    if (propertySchema?.type !== 'string' && typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
+      try { val = JSON.parse(val) } catch { /* keep the raw string */ }
     }
     if (fileSchemaKey) {
       const { readFileSync } = await import('node:fs')
