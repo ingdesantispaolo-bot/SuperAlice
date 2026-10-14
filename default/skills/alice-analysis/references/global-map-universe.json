@@ -1,0 +1,100 @@
+{
+  "schema": "superai.global-map.universe/1",
+  "revision": "2026-10-14.1",
+  "baseCurrency": "EUR",
+  "note": "50 core assets; aux FX and macro series are not counted. Sources verified in phase A (2026-10-13). Yahoo returns use adj_close; the source label says so.",
+  "groups": {
+    "money": { "label": "Monetario", "relative": null },
+    "fx": { "label": "Valute", "relative": null },
+    "rates": { "label": "Titoli di Stato", "relative": null },
+    "credit": { "label": "Credito", "relative": null },
+    "vol": { "label": "Volatilità", "relative": null },
+    "eq-areas": { "label": "Azioni per area", "relative": "asset.eq.global" },
+    "eq-styles": { "label": "Stili e dimensione (USA)", "relative": "asset.eq.us" },
+    "eq-sectors-us": { "label": "Settori USA", "relative": "asset.eq.us" },
+    "commodities": { "label": "Materie prime", "relative": "group-median" },
+    "crypto": { "label": "Crypto", "relative": "group-median" }
+  },
+  "assets": [
+    { "assetId": "asset.money.estr", "label": "€STR", "group": "money", "kind": "rate", "currency": "EUR", "frequency": "daily", "series": { "seriesId": "series.money.estr.fred", "source": "fred", "symbol": "ECBESTRVOLWGTTRMDMNRT" } },
+    { "assetId": "asset.money.sofr", "label": "SOFR", "group": "money", "kind": "rate", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.money.sofr.fred", "source": "fred", "symbol": "SOFR" } },
+
+    { "assetId": "asset.fx.eurusd", "label": "EUR/USD", "group": "fx", "kind": "fx", "currency": null, "quote": "USD per EUR", "frequency": "daily", "series": { "seriesId": "series.fx.eurusd.yahoo", "source": "yahoo", "symbol": "EURUSD=X", "assetClass": "currency" } },
+    { "assetId": "asset.fx.usdjpy", "label": "USD/JPY", "group": "fx", "kind": "fx", "currency": null, "quote": "JPY per USD", "frequency": "daily", "series": { "seriesId": "series.fx.usdjpy.yahoo", "source": "yahoo", "symbol": "JPY=X", "assetClass": "currency" } },
+    { "assetId": "asset.fx.usdcny", "label": "USD/CNY (onshore)", "group": "fx", "kind": "fx", "currency": null, "quote": "CNY per USD", "frequency": "daily", "series": { "seriesId": "series.fx.usdcny.yahoo", "source": "yahoo", "symbol": "CNY=X", "assetClass": "currency" }, "notes": "USD/CNH has no Yahoo history; onshore CNY used instead." },
+    { "assetId": "asset.fx.dxy", "label": "Dollaro (DXY)", "group": "fx", "kind": "fx", "currency": null, "quote": "index", "frequency": "daily", "series": { "seriesId": "series.fx.dxy.yahoo", "source": "yahoo", "symbol": "DX-Y.NYB", "assetClass": "equity" } },
+
+    { "assetId": "asset.rates.us.2y", "label": "USA 2 anni", "group": "rates", "kind": "yield", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.rates.us.2y.fred", "source": "fred", "symbol": "DGS2" } },
+    { "assetId": "asset.rates.us.10y", "label": "USA 10 anni", "group": "rates", "kind": "yield", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.rates.us.10y.fred", "source": "fred", "symbol": "DGS10" } },
+    { "assetId": "asset.rates.us.30y", "label": "USA 30 anni", "group": "rates", "kind": "yield", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.rates.us.30y.fred", "source": "fred", "symbol": "DGS30" } },
+    { "assetId": "asset.rates.de.2y", "label": "Germania 2 anni", "group": "rates", "kind": "yield", "currency": "EUR", "frequency": "daily", "series": { "seriesId": "series.rates.de.2y.bundesbank", "source": "bundesbank", "symbol": "BBSIS/D.I.ZAR.ZI.EUR.S1311.B.A604.R02XX.R.A.A._Z._Z.A" }, "notes": "Bundesbank term-structure yield on Federal securities, not the on-the-run benchmark." },
+    { "assetId": "asset.rates.de.10y", "label": "Germania 10 anni", "group": "rates", "kind": "yield", "currency": "EUR", "frequency": "daily", "series": { "seriesId": "series.rates.de.10y.bundesbank", "source": "bundesbank", "symbol": "BBSIS/D.I.ZAR.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A" }, "notes": "Bundesbank term-structure yield on Federal securities, not the on-the-run benchmark." },
+    { "assetId": "asset.rates.it.10y", "label": "Italia 10 anni", "group": "rates", "kind": "yield", "currency": "EUR", "frequency": "monthly", "series": { "seriesId": "series.rates.it.10y.fred-monthly", "source": "fred", "symbol": "IRLTLT01ITM156N" }, "notes": "GAP: only the monthly OECD long-term rate is automatic; daily needs Investing.com or the monitor BTP feed." },
+    { "assetId": "asset.rates.jp.10y", "label": "Giappone 10 anni", "group": "rates", "kind": "yield", "currency": "JPY", "frequency": "daily", "series": { "seriesId": "series.rates.jp.10y.mof", "source": "mof-jgb", "symbol": "10Y" } },
+
+    { "assetId": "asset.credit.us.ig", "label": "Credito IG USA (OAS)", "group": "credit", "kind": "spread", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.credit.us.ig.fred", "source": "fred", "symbol": "BAMLC0A0CM" }, "notes": "ICE BofA OAS on FRED: about 3 years of history only." },
+    { "assetId": "asset.credit.us.hy", "label": "Credito HY USA (OAS)", "group": "credit", "kind": "spread", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.credit.us.hy.fred", "source": "fred", "symbol": "BAMLH0A0HYM2" }, "notes": "ICE BofA OAS on FRED: about 3 years of history only." },
+    { "assetId": "asset.credit.eu.hy", "label": "Credito HY euro (OAS)", "group": "credit", "kind": "spread", "currency": "EUR", "frequency": "daily", "series": { "seriesId": "series.credit.eu.hy.fred", "source": "fred", "symbol": "BAMLHE00EHYIOAS" }, "notes": "ICE BofA OAS on FRED: about 3 years of history only." },
+    { "assetId": "asset.credit.eu.ig", "label": "Credito IG euro", "group": "credit", "kind": "spread", "currency": "EUR", "frequency": "daily", "series": { "seriesId": "series.credit.eu.ig.none", "source": "none", "symbol": null }, "notes": "GAP: no automatic source found in phase A." },
+
+    { "assetId": "asset.vol.vix", "label": "VIX", "group": "vol", "kind": "level", "currency": null, "frequency": "daily", "series": { "seriesId": "series.vol.vix.yahoo", "source": "yahoo", "symbol": "^VIX", "assetClass": "equity" } },
+    { "assetId": "asset.vol.vstoxx", "label": "VSTOXX", "group": "vol", "kind": "level", "currency": null, "frequency": "daily", "series": { "seriesId": "series.vol.vstoxx.stoxx", "source": "stoxx", "symbol": "V2TX" } },
+    { "assetId": "asset.vol.move", "label": "MOVE (volatilità Treasury)", "group": "vol", "kind": "level", "currency": null, "frequency": "daily", "series": { "seriesId": "series.vol.move.yahoo", "source": "yahoo", "symbol": "^MOVE", "assetClass": "equity" } },
+
+    { "assetId": "asset.eq.global", "label": "Azioni globali (ACWI)", "group": "eq-areas", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.eq.global.yahoo", "source": "yahoo", "symbol": "ACWI", "assetClass": "equity" } },
+    { "assetId": "asset.eq.us", "label": "USA (S&P 500)", "group": "eq-areas", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.eq.us.yahoo", "source": "yahoo", "symbol": "^GSPC", "assetClass": "equity" } },
+    { "assetId": "asset.eq.eu", "label": "Europa (STOXX 600)", "group": "eq-areas", "kind": "price", "currency": "EUR", "frequency": "daily", "series": { "seriesId": "series.eq.eu.yahoo", "source": "yahoo", "symbol": "^STOXX", "assetClass": "equity" } },
+    { "assetId": "asset.eq.it", "label": "Italia (FTSE MIB)", "group": "eq-areas", "kind": "price", "currency": "EUR", "frequency": "daily", "series": { "seriesId": "series.eq.it.yahoo", "source": "yahoo", "symbol": "FTSEMIB.MI", "assetClass": "equity" } },
+    { "assetId": "asset.eq.jp", "label": "Giappone (Nikkei 225)", "group": "eq-areas", "kind": "price", "currency": "JPY", "frequency": "daily", "series": { "seriesId": "series.eq.jp.yahoo", "source": "yahoo", "symbol": "^N225", "assetClass": "equity" } },
+    { "assetId": "asset.eq.cn", "label": "Cina (MCHI)", "group": "eq-areas", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.eq.cn.yahoo", "source": "yahoo", "symbol": "MCHI", "assetClass": "equity" } },
+    { "assetId": "asset.eq.in", "label": "India (Nifty 50)", "group": "eq-areas", "kind": "price", "currency": "INR", "frequency": "daily", "series": { "seriesId": "series.eq.in.yahoo", "source": "yahoo", "symbol": "^NSEI", "assetClass": "equity" } },
+    { "assetId": "asset.eq.em", "label": "Emergenti (EEM)", "group": "eq-areas", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.eq.em.yahoo", "source": "yahoo", "symbol": "EEM", "assetClass": "equity" } },
+
+    { "assetId": "asset.style.us.growth", "label": "Growth USA (IVW)", "group": "eq-styles", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.style.us.growth.yahoo", "source": "yahoo", "symbol": "IVW", "assetClass": "equity" } },
+    { "assetId": "asset.style.us.value", "label": "Value USA (IVE)", "group": "eq-styles", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.style.us.value.yahoo", "source": "yahoo", "symbol": "IVE", "assetClass": "equity" } },
+    { "assetId": "asset.style.us.small", "label": "Small cap USA (Russell 2000)", "group": "eq-styles", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.style.us.small.yahoo", "source": "yahoo", "symbol": "^RUT", "assetClass": "equity" } },
+
+    { "assetId": "asset.sector.us.materials", "label": "Materiali (XLB)", "group": "eq-sectors-us", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.sector.us.materials.yahoo", "source": "yahoo", "symbol": "XLB", "assetClass": "equity" } },
+    { "assetId": "asset.sector.us.communication", "label": "Comunicazioni (XLC)", "group": "eq-sectors-us", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.sector.us.communication.yahoo", "source": "yahoo", "symbol": "XLC", "assetClass": "equity" } },
+    { "assetId": "asset.sector.us.energy", "label": "Energia (XLE)", "group": "eq-sectors-us", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.sector.us.energy.yahoo", "source": "yahoo", "symbol": "XLE", "assetClass": "equity" } },
+    { "assetId": "asset.sector.us.financials", "label": "Finanziari (XLF)", "group": "eq-sectors-us", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.sector.us.financials.yahoo", "source": "yahoo", "symbol": "XLF", "assetClass": "equity" } },
+    { "assetId": "asset.sector.us.industrials", "label": "Industriali (XLI)", "group": "eq-sectors-us", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.sector.us.industrials.yahoo", "source": "yahoo", "symbol": "XLI", "assetClass": "equity" } },
+    { "assetId": "asset.sector.us.tech", "label": "Tecnologia (XLK)", "group": "eq-sectors-us", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.sector.us.tech.yahoo", "source": "yahoo", "symbol": "XLK", "assetClass": "equity" } },
+    { "assetId": "asset.sector.us.staples", "label": "Beni di prima necessità (XLP)", "group": "eq-sectors-us", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.sector.us.staples.yahoo", "source": "yahoo", "symbol": "XLP", "assetClass": "equity" } },
+    { "assetId": "asset.sector.us.realestate", "label": "Immobiliare (XLRE)", "group": "eq-sectors-us", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.sector.us.realestate.yahoo", "source": "yahoo", "symbol": "XLRE", "assetClass": "equity" } },
+    { "assetId": "asset.sector.us.utilities", "label": "Servizi pubblici (XLU)", "group": "eq-sectors-us", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.sector.us.utilities.yahoo", "source": "yahoo", "symbol": "XLU", "assetClass": "equity" } },
+    { "assetId": "asset.sector.us.health", "label": "Salute (XLV)", "group": "eq-sectors-us", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.sector.us.health.yahoo", "source": "yahoo", "symbol": "XLV", "assetClass": "equity" } },
+    { "assetId": "asset.sector.us.discretionary", "label": "Beni discrezionali (XLY)", "group": "eq-sectors-us", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.sector.us.discretionary.yahoo", "source": "yahoo", "symbol": "XLY", "assetClass": "equity" } },
+
+    { "assetId": "asset.cmd.gold", "label": "Oro (future)", "group": "commodities", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.cmd.gold.yahoo", "source": "yahoo", "symbol": "GC=F", "assetClass": "commodity" }, "notes": "Front-month continuous future: roll effects included." },
+    { "assetId": "asset.cmd.silver", "label": "Argento (future)", "group": "commodities", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.cmd.silver.yahoo", "source": "yahoo", "symbol": "SI=F", "assetClass": "commodity" }, "notes": "Front-month continuous future: roll effects included." },
+    { "assetId": "asset.cmd.brent", "label": "Brent (future)", "group": "commodities", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.cmd.brent.yahoo", "source": "yahoo", "symbol": "BZ=F", "assetClass": "commodity" }, "notes": "Front-month future, not Dated Brent spot (FRED DCOILBRENTEU)." },
+    { "assetId": "asset.cmd.natgas", "label": "Gas naturale USA (future)", "group": "commodities", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.cmd.natgas.yahoo", "source": "yahoo", "symbol": "NG=F", "assetClass": "commodity" }, "notes": "Front-month continuous future: roll effects included." },
+    { "assetId": "asset.cmd.copper", "label": "Rame (future)", "group": "commodities", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.cmd.copper.yahoo", "source": "yahoo", "symbol": "HG=F", "assetClass": "commodity" }, "notes": "Front-month continuous future: roll effects included." },
+    { "assetId": "asset.cmd.agri", "label": "Agricole (DBA)", "group": "commodities", "kind": "price", "currency": "USD", "frequency": "daily", "series": { "seriesId": "series.cmd.agri.yahoo", "source": "yahoo", "symbol": "DBA", "assetClass": "equity" } },
+
+    { "assetId": "asset.crypto.btc", "label": "Bitcoin", "group": "crypto", "kind": "price", "currency": "USD", "frequency": "daily", "calendar": "7d", "series": { "seriesId": "series.crypto.btc.yahoo", "source": "yahoo", "symbol": "BTC-USD", "assetClass": "crypto" } },
+    { "assetId": "asset.crypto.eth", "label": "Ethereum", "group": "crypto", "kind": "price", "currency": "USD", "frequency": "daily", "calendar": "7d", "series": { "seriesId": "series.crypto.eth.yahoo", "source": "yahoo", "symbol": "ETH-USD", "assetClass": "crypto" } }
+  ],
+  "aux": [
+    { "seriesId": "series.fx.usdinr.yahoo", "label": "USD/INR (conversione)", "kind": "fx", "frequency": "daily", "source": "yahoo", "symbol": "INR=X", "assetClass": "currency" }
+  ],
+  "macro": [
+    { "seriesId": "series.macro.us.fedfunds.fred", "label": "Fed funds effettivo", "kind": "rate", "frequency": "daily", "source": "fred", "symbol": "DFF" },
+    { "seriesId": "series.macro.ea.ecb-dfr.fred", "label": "BCE, tasso sui depositi", "kind": "rate", "frequency": "daily", "source": "fred", "symbol": "ECBDFR" },
+    { "seriesId": "series.macro.us.real10y.fred", "label": "USA tasso reale 10 anni (TIPS)", "kind": "yield", "frequency": "daily", "source": "fred", "symbol": "DFII10" },
+    { "seriesId": "series.macro.us.breakeven10y.fred", "label": "USA inflazione attesa 10 anni", "kind": "yield", "frequency": "daily", "source": "fred", "symbol": "T10YIE" },
+    { "seriesId": "series.macro.us.cpi.fred", "label": "USA indice dei prezzi (CPI)", "kind": "index", "frequency": "monthly", "source": "fred", "symbol": "CPIAUCSL" },
+    { "seriesId": "series.macro.de.10y-monthly.fred", "label": "Germania 10 anni (mensile OCSE)", "kind": "yield", "frequency": "monthly", "source": "fred", "symbol": "IRLTLT01DEM156N" },
+    { "seriesId": "series.valuation.us.spx-pe.traderhub", "label": "S&P 500 P/E", "kind": "ratio", "frequency": "monthly", "source": "traderhub-valuation", "symbol": "pe_month" },
+    { "seriesId": "series.valuation.us.spx-cape.traderhub", "label": "S&P 500 CAPE", "kind": "ratio", "frequency": "monthly", "source": "traderhub-valuation", "symbol": "shiller_pe_month" }
+  ],
+  "derived": [
+    { "assetId": "derived.rates.us.2s10s", "label": "USA pendenza 2–10 anni", "op": "diff", "a": "series.rates.us.10y.fred", "b": "series.rates.us.2y.fred", "unit": "bp" },
+    { "assetId": "derived.rates.de.2s10s", "label": "Germania pendenza 2–10 anni", "op": "diff", "a": "series.rates.de.10y.bundesbank", "b": "series.rates.de.2y.bundesbank", "unit": "bp" },
+    { "assetId": "derived.rates.btp-bund.monthly", "label": "Spread BTP-Bund (mensile OCSE)", "op": "diff", "a": "series.rates.it.10y.fred-monthly", "b": "series.macro.de.10y-monthly.fred", "unit": "bp" },
+    { "assetId": "derived.ratio.growth-value", "label": "Growth / Value USA", "op": "ratio", "a": "series.style.us.growth.yahoo", "b": "series.style.us.value.yahoo", "unit": "ratio" },
+    { "assetId": "derived.ratio.small-large", "label": "Small / Large USA", "op": "ratio", "a": "series.style.us.small.yahoo", "b": "series.eq.us.yahoo", "unit": "ratio" },
+    { "assetId": "derived.ratio.gold-silver", "label": "Oro / Argento", "op": "ratio", "a": "series.cmd.gold.yahoo", "b": "series.cmd.silver.yahoo", "unit": "ratio" }
+  ]
+}
