@@ -17,6 +17,7 @@
 import { DiscoveryStore, selectRelease, releaseChannelMatchesVersion, installSourceUpdateChannel, releaseChannelForVersion, type ReleaseDecision } from '@traderalice/update-lifecycle'
 import { readFileSync } from 'node:fs'
 import { getProductVersion as getCurrentVersion } from '@traderalice/update-lifecycle/node'
+import { runningBuild, type RunningBuildInfo } from './running-build.js'
 export { getCurrentVersion }
 
 // ==================== Latest release (cached manifest fetch) ====================
@@ -153,6 +154,8 @@ export function _resetCacheForTest(): void {
 
 export interface VersionInfo {
   current: string
+  /** Source identity captured when this backend loaded; never the remote feed. */
+  runningBuild: Readonly<RunningBuildInfo> | null
   channel: VersionChannel
   updateAuthority: UpdateAuthority
   latest: string | null
@@ -186,6 +189,7 @@ export async function getVersionInfo(opts?: GetVersionInfoOptions): Promise<Vers
   ) {
     return {
       current,
+      runningBuild,
       channel: context.channel,
       updateAuthority: context.authority,
       latest: null,
@@ -205,6 +209,7 @@ export async function getVersionInfo(opts?: GetVersionInfoOptions): Promise<Vers
   if (!result) {
     return {
       current,
+      runningBuild,
       channel: context.channel,
       updateAuthority: context.authority,
       latest: null, hasUpdate: false, decision: null,
@@ -220,6 +225,7 @@ export async function getVersionInfo(opts?: GetVersionInfoOptions): Promise<Vers
   const hasUpdate = !error && decision.status === 'available'
   return {
     current,
+    runningBuild,
     channel: context.channel,
     updateAuthority: context.authority,
     latest: result.version,

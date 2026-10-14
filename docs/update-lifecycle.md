@@ -15,6 +15,16 @@ The reader never searches cwd or substitutes a private package's version.
 The CLI workspace is private and has no authored product version. Existing
 native/npm assembly generates distribution metadata from the root identity.
 
+The Quick Start page displays the running backend's product version and, for
+the explicit source-development launcher, its commit date/time, abbreviated revision and local-change
+state. `/api/version.runningBuild` captures Git metadata once when the backend
+module loads; changing HEAD without reloading must not relabel an older process.
+The date is the source commit's committer timestamp, formatted in the user's
+local timezone, not process startup or the latest remote release's publication
+date. Compiled/installed runtimes and unavailable Git metadata report no source
+snapshot; the UI explicitly shows that the date is unavailable. Update feed
+selection and renderer/relay identity remain separate.
+
 The desktop relay bundles this reader with the existing build-version injection;
 leaving it external would make an installed package search for a source manifest.
 The launcher declares its actual desktop mode before initializing readers. Desktop

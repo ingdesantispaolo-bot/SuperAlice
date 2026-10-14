@@ -1,4 +1,5 @@
 import { ProjectWorkspaceSetupNotice } from '../components/ProjectWorkspaceSetupNotice'
+import { RunningReleaseBadge } from '../components/RunningReleaseBadge'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Binary, ChevronDown, MessageSquare, Microscope } from 'lucide-react'
@@ -45,6 +46,7 @@ export function QuickStartPage() {
           </DropdownMenuContent>
         </DropdownMenu>
       )} />
+      <RunningReleaseBadge />
       <ProjectWorkspaceSetupNotice onPrepared={() => setPrepared(value => value + 1)} />
       <Page key={`${harness}:${prepared}`} spec={{ params: { initialPrompt: drafts[harness] } }} showHeader={false}
         onPromptChange={prompt => setDrafts(previous => ({ ...previous, [harness]: prompt }))} />

@@ -13,6 +13,10 @@
  */
 
 export const en = {
+  runningRelease: {
+    label: 'Running version', updated: 'Updated', revision: 'Revision',
+    localChanges: 'Local changes', dateUnavailable: 'Update date unavailable',
+  },
   activityPreferences: {
     title: 'Activity notifications', description: 'Filter activity announcements. Your activity history stays complete.',
     desktopOnly: 'Activity notification preferences require the desktop app.',
@@ -1216,7 +1220,7 @@ export const en = {
       allowAiTradingOff: 'OFF — the AI can stage and propose trades, but every push needs your approval in the Web UI.',
       allowAiTradingWarning: 'AI auto-trading is ON. The AI can place, modify and cancel real orders on its own. Per-account read-only still applies.',
       allowAiTradingScope: 'Limited to these accounts: {{accounts}}. Every other account still needs your approval.',
-      allowAiTradingScopeNone: 'No account is listed in aiTradingAccounts: AI pushes are refused on every account.',
+      allowAiTradingScopeNone: 'The account list is empty: no account allows AI pushes.',
       allowAiTradingConfirmTitle: 'Enable AI auto-trading?',
       allowAiTradingConfirmBody: 'This lets the AI send live orders to your broker without asking you each time. The UTA trading interface is still unstable and may have precision or parameter issues. Strongly discouraged on real-money accounts — use a paper / demo account.',
       allowAiTradingConfirmCta: 'Enable auto-trading',

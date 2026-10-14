@@ -11,6 +11,10 @@ import type { Resources } from './en'
  * Content is UI chrome only — no geographic or other non-technical terms.
  */
 export const zhHant: Resources = {
+  runningRelease: {
+    label: '執行版本', updated: '更新時間', revision: '修訂',
+    localChanges: '本機修改', dateUnavailable: '更新時間無法取得',
+  },
   activityPreferences: en.activityPreferences,
 
   sessionControl: {

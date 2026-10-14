@@ -3,6 +3,10 @@ import type { Resources } from './en'
 
 /** 日本語. Typed as `Resources` → must match en's key structure exactly. */
 export const ja: Resources = {
+  runningRelease: {
+    label: '実行中のバージョン', updated: '更新日時', revision: 'リビジョン',
+    localChanges: 'ローカルの変更あり', dateUnavailable: '更新日時は不明です',
+  },
   activityPreferences: en.activityPreferences,
 
   sessionControl: {

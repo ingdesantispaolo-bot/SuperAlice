@@ -2,6 +2,10 @@ import type { Resources } from './en'
 
 /** 简体中文. Typed as `Resources` → must match en's key structure exactly. */
 export const zh: Resources = {
+  runningRelease: {
+    label: '运行版本', updated: '更新时间', revision: '修订',
+    localChanges: '本地修改', dateUnavailable: '更新时间不可用',
+  },
   activityPreferences: {
     title: '活动通知', description: '按偏好过滤提醒，完整活动记录不受影响。', desktopOnly: '通知偏好仅在桌面应用中可用。',
     enabled: '自动通知', main: '右上角通知', pet: '后台桌宠气泡', brief: '简短气泡 · 隐藏姓名和内容', events: '通知事件',

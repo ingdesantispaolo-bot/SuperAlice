@@ -6,6 +6,8 @@ export type UpdateAuthority = 'source' | 'desktop' | 'cli' | 'service' | 'none'
 export interface VersionInfo {
   /** App version from package.json. */
   current: string
+  /** Absent on older backends; source identity captured when the backend loaded. */
+  runningBuild?: { commit: string; committedAt: string; dirty: boolean } | null
   /** Running installation's normalized update channel. */
   channel: UpdateChannel
   /** Surface that owns update discovery and application. */
