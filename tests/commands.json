@@ -478,6 +478,28 @@
         "Windows-x64"
       ],
       "arguments": "Explicit artifact arguments are required where shown; consult the runner/owner guide."
+    },
+    {
+      "id": "ibiv-monitor-mcp",
+      "path": "scripts/verify-ibiv-mcp.mts",
+      "invocation": "pnpm exec tsx --tsconfig tsconfig.json scripts/verify-ibiv-mcp.mts",
+      "owner": "alice",
+      "lane": "system",
+      "kind": "artifact-acceptance",
+      "sideEffects": "starts the real isolated Windows monitor and its stdio relay under the same OS user, with closed TWS port 1; no orders or models",
+      "prerequisites": ["Windows", "IBIV_MONITOR_PROBE_EXE points to the built MCP monitor", "installed workspace dependencies"],
+      "platforms": ["Windows-x64"]
+    },
+    {
+      "id": "ibiv-monitor-background",
+      "path": "scripts/verify-ibiv-monitor.mts",
+      "invocation": "pnpm exec tsx --tsconfig tsconfig.json scripts/verify-ibiv-monitor.mts",
+      "owner": "alice",
+      "lane": "system",
+      "kind": "artifact-acceptance",
+      "sideEffects": "starts the actual Windows WPF monitor without windows, with isolated SQLite and closed local port 1; no TWS, orders or models",
+      "prerequisites": ["Windows host", "built IbIvMonitor executable; optional IBIV_MONITOR_PROBE_EXE selects the candidate", "installed workspace dependencies"],
+      "platforms": ["Windows-x64"]
     }
   ]
 }
