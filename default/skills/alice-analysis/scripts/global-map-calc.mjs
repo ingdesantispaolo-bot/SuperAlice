@@ -70,15 +70,17 @@ function entry(spec, base) {
 
 const assets = universe.assets.map(a => entry(
   { ...a.series, kind: a.kind, currency: a.currency, frequency: a.frequency, calendar: a.calendar },
-  { assetId: a.assetId, label: a.label, group: a.group, kind: a.kind, currency: a.currency, frequency: a.frequency, seriesId: a.series.seriesId, source: a.series.source, notes: a.notes ?? null },
+  { assetId: a.assetId, label: a.label, group: a.group, assetClass: a.assetClass, kind: a.kind, currency: a.currency, frequency: a.frequency, seriesId: a.series.seriesId, source: a.series.source, notes: a.notes ?? null },
 ))
-const macro = universe.macro.map(m => entry(m, { assetId: m.seriesId.replace(/^series\./, 'macro.'), label: m.label, kind: m.kind, frequency: m.frequency, seriesId: m.seriesId, source: m.source, notes: null }))
+const macro = universe.macro.map(m => entry(m, { assetId: m.assetId, label: m.label, assetClass: m.assetClass, kind: m.kind, frequency: m.frequency, seriesId: m.seriesId, source: m.source, notes: null }))
 
+const frequencyOf = id => [...universe.assets.map(x => ({ ...x.series, frequency: x.frequency })), ...universe.aux, ...universe.macro].find(s => s.seriesId === id)?.frequency
 const derived = universe.derived.map(d => {
   const a = parsed.get(d.a), b = parsed.get(d.b)
   const kind = d.op === 'ratio' ? 'price-ratio' : 'spread-bp'
-  const monthly = [d.a, d.b].some(id => [...universe.assets.map(x => ({ ...x.series, frequency: x.frequency })), ...universe.macro].find(s => s.seriesId === id)?.frequency === 'monthly')
-  const base = { assetId: d.assetId, label: d.label, kind, frequency: monthly ? 'monthly' : 'daily', seriesId: `${d.a} ${d.op} ${d.b}`, source: 'derived', notes: null }
+  const monthly = [d.a, d.b].some(id => frequencyOf(id) === 'monthly')
+  const formula = d.op === 'ratio' ? `${d.a} / ${d.b}` : `(${d.a} − ${d.b}) × 100 (bp)`
+  const base = { assetId: d.assetId, label: d.label, assetClass: d.assetClass, kind, frequency: monthly ? 'monthly' : 'daily', seriesId: d.seriesId, formula, source: 'derived', notes: d.notes ?? null }
   if (!a || !b) return { ...base, status: 'missing', lastDate: null, staleDays: null, measures: {} }
   return { ...base, ...computeSeries({ kind, frequency: base.frequency, source: 'derived' }, deriveSeries(d.op, a, b, monthly), { asOf }) }
 })
