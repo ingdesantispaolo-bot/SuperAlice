@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  applyRelative, catalogEntries, computeSeries, computeValuation, evaluateCondition, extractValuation, deriveSeries, eurFactor, measureCatalog, parseSeries, renderTables,
+  applyRelative, assetMainPoints, catalogEntries, computeSeries, computeValuation, evaluateCondition, extractValuation, spliceSeries, deriveSeries, eurFactor, measureCatalog, parseSeries, renderTables,
   rsiWilder, shiftDate, valueAt, type MapEntry, type Point,
 } from '../../../default/skills/alice-analysis/scripts/global-map-lib.mjs'
 import { readLimited, safeDir } from '../../../default/skills/alice-analysis/scripts/global-map-io.mjs'
@@ -250,11 +250,54 @@ describe('global map memory catalog', () => {
     expect(entries.filter(e => e.role === 'asset').every(e => !('source' in e) && !('method' in e))).toBe(true)
     const byId = new Map(entries.map(e => [e.entityId, e]))
     expect(byId.get('series.vol.vix.yahoo')).toMatchObject({ assetClass: 'volatility', assetId: 'asset.vol.vix' })
-    expect(byId.get('series.rates.de.10y.bundesbank')).toMatchObject({ yieldType: 'par', unit: '%', currency: 'EUR' })
+    expect(byId.get('series.rates.de.10y.bundesbank')).toMatchObject({ yieldType: 'par', unit: '%' })
     expect(byId.get('series.rates.it.10y.fred-monthly')).toMatchObject({ yieldType: 'unknown' })
-    expect(byId.get('series.derived.ratio.btp-bund-futures')).toMatchObject({ role: 'proxy', unit: 'ratio', assetId: 'derived.ratio.btp-bund-futures' })
+    expect(byId.get('series.rates.it.10y.ibkr')).toMatchObject({ assetId: 'asset.rates.it.10y', source: 'IbIvMonitor daily archive (IBKR)', sourceSeriesId: 'FUT:BTP:EUREX:EUR:FBTP:1000' })
+    expect(byId.get('series.money.estr.ibkr')).toMatchObject({ unit: 'price (100 - rate)' })
+    expect(byId.get('asset.fx.usdcnh')).toMatchObject({ role: 'asset', assetClass: 'currency' })
+    expect(byId.get('series.derived.ratio.btp-bund-futures.v2')).toMatchObject({ role: 'proxy', unit: 'ratio', assetId: 'derived.ratio.btp-bund-futures' })
     for (const e of entries.filter(x => x.role !== 'asset')) expect(byId.get(e.assetId as string)?.assetClass).toBe(e.assetClass)
     expect(new Set(entries.map(e => e.entityId)).size).toBe(entries.length)
+  })
+
+  it('gives 46 of the 50 assets a real-time IBKR primary', () => {
+    const universe = JSON.parse(readFileSync(new URL('../../../default/skills/alice-analysis/references/global-map-universe.json', import.meta.url), 'utf8'))
+    expect(universe.schema).toBe('superai.global-map.universe/2')
+    expect(universe.assets).toHaveLength(50)
+    const eod = universe.assets.filter((a: { primary: { realtime: boolean } }) => !a.primary.realtime).map((a: { assetId: string }) => a.assetId)
+    expect(eod.sort()).toEqual(['asset.credit.em.corp', 'asset.credit.eu.hy', 'asset.money.sofr', 'asset.vol.move'])
+  })
+})
+
+describe('global map history splice', () => {
+  const days = (n: number, f: (i: number) => number) => weekdays('2024-01-01', n, f)
+
+  it('scales older history to the primary at the first common session when weekly returns agree', () => {
+    const history = days(300, i => 100 * Math.exp(0.001 * i + 0.01 * Math.sin(i / 3)))
+    const primary = history.slice(150).map(p => ({ date: p.date, value: p.value * 2 }))
+    const s = spliceSeries(primary, history)
+    expect(s.splice).toMatchObject({ junction: primary[0].date, ratio: 2, historyFrom: history[0].date })
+    expect(s.points).toHaveLength(300)
+    expect(s.points[0].value).toBeCloseTo(history[0].value * 2)
+  })
+
+  it('keeps the primary alone when the overlap is short or the series disagree', () => {
+    const history = days(300, i => 100 + i)
+    const short = history.slice(250).map(p => ({ ...p }))
+    expect(spliceSeries(short, history).reason).toContain('overlap of 50 sessions')
+    const noise = history.slice(100).map((p, i) => ({ date: p.date, value: 100 + 10 * Math.sin(i * 1.7) }))
+    expect(spliceSeries(noise, history).reason).toContain('correlation')
+  })
+
+  it('reads the declared history while the primary is still being collected, and STIR prices as rates', () => {
+    const history = days(10, i => 50 + i).map(p => ({ ...p, close: p.value - 1 }))
+    const prep = { parsed: new Map([['h', history]]) }
+    const etf = { kind: 'price', primary: { seriesId: 'p', source: 'monitor' }, history: { seriesId: 'h' } }
+    const r = assetMainPoints(prep as never, etf as never)
+    expect(r).toMatchObject({ historyOnly: true })
+    const stir = { kind: 'stir', primary: { seriesId: 's', source: 'monitor' }, history: null }
+    const s = assetMainPoints({ parsed: new Map([['s', [{ date: '2026-10-13', value: 97.3 }]]]) } as never, stir as never)
+    expect(s.points[0].value).toBeCloseTo(2.7)
   })
 })
 
@@ -277,7 +320,7 @@ describe('global map relative strength and output', () => {
     expect(units).toEqual({ last: 'EUR', ret_3m_pct: '%', trend_long: 'state', rsi14: 'score' })
     const md = renderTables({ methodVersion: 'm', runId: 'r', asOf: '2026-10-13', groups: { eq: { label: 'Azioni', relative: null }, credit: { label: 'Credito', relative: null } }, assets: [e, gap], derived: [] })
     expect(md).toContain('do not edit numbers by hand')
-    expect(md).toContain('| asset.eq.it | 50.057 | 13/10 |')
+    expect(md).toContain('| asset.eq.it | fine giornata | 50.057 | 13/10 |')
     expect(md).toContain('−5,2%')
     expect(md).toContain('| lacuna |')
   })

@@ -34,7 +34,7 @@ const universePath = options['--universe'] ? join(root, options['--universe']) :
 if (options['--universe'] && !isInside(root, await realpath(universePath))) throw new Error('Universe escaped the Workspace')
 const universeBytes = await readFile(universePath)
 const universe = JSON.parse(universeBytes.toString('utf8'))
-if (universe.schema !== 'superai.global-map.universe/1') throw new Error('Unsupported universe schema')
+if (universe.schema !== 'superai.global-map.universe/2') throw new Error('Unsupported universe schema')
 
 // Every directory is checked component by component before anything is written.
 const runsDir = await safeDir(root, 'research/market-assistant/runs')
@@ -51,6 +51,10 @@ const tools = {
   fred: await gw.toolName('traderhub', 'economy', 'fred-series'),
   board: await gw.toolName('traderhub', 'board', 'get'),
   monitorDaily: await gw.toolName('data', 'monitor', 'history-daily'),
+  monitorList: await gw.toolName('data', 'monitor', 'instruments-list'),
+  monitorResolve: await gw.toolName('data', 'monitor', 'instrument-resolve'),
+  utaSearch: await gw.toolName('uta', 'contract', 'search'),
+  utaQuote: await gw.toolName('uta', 'contract', 'quote'),
 }
 const text = body => body.content[0].text
 
@@ -78,7 +82,10 @@ function requestsFor(spec) {
     const a = { symbol: sym, start_date: start }
     return [{ key: `fred:${sym}`, describe: { tool: tools.fred, args: a }, run: async () => text(await gw.invoke('traderhub', tools.fred, a)) }]
   }
-  if (s === 'monitor') return [{ key: `monitor:${sym}`, describe: { tool: tools.monitorDaily, args: { id: sym } }, run: () => invokeMonitor(tools.monitorDaily, { id: sym }) }]
+  if (s === 'monitor') {
+    const a = { id: sym, from: `${start}T00:00:00Z`, limit: 10000 }
+    return [{ key: `monitor:${sym}`, describe: { tool: tools.monitorDaily, args: a }, run: () => invokeMonitor(tools.monitorDaily, a) }]
+  }
   if (s === 'ishares' || s === 'ssga') {
     // Issuer pages are ~2 MB: keep the page hash and the verbatim value fragments, not the page.
     return [{ key: `${s}:${spec.fund}`, describe: { url: sym }, run: async () => {
@@ -106,10 +113,78 @@ function requestsFor(spec) {
 }
 
 const specs = [
-  ...universe.assets.map(a => ({ ...a.series, frequency: a.frequency })),
+  ...universe.assets.flatMap(a => [{ ...a.primary, frequency: a.frequency }, ...(a.history ? [{ ...a.history, frequency: a.frequency }] : []), ...(a.extras ?? [])]),
   ...universe.aux, ...universe.macro,
   ...(universe.valuations ?? []).map(v => ({ seriesId: v.seriesId, source: v.provider, symbol: v.url, fund: v.fund })),
-].filter(s => s.source !== 'none')
+].filter((s, i, all) => s.source !== 'none' && all.findIndex(x => x.seriesId === s.seriesId) === i)
+
+/**
+ * Live IBKR quotes of every real-time primary, through UTA (read-only). conIds come
+ * from the monitor catalogue; ETFs without one are looked up on the IBKR account.
+ */
+async function liveQuotes() {
+  const list = JSON.parse(text(await gw.invoke('data', tools.monitorList, {})))
+  const entries = new Map((list.instruments ?? list.items ?? list).map(i => [i.id, i]))
+  const probe = JSON.parse(text(await gw.invoke('uta', tools.utaSearch, { pattern: 'EUR', source: 'ibkr' })))
+  const account = Array.isArray(probe) ? probe[0]?.contract?.aliceId?.split('|')[0] ?? null : null
+  if (!account) throw new Error('No IBKR account available through UTA')
+  const quote = async conId => JSON.parse(text(await gw.invoke('uta', tools.utaQuote, { aliceId: `${account}|${conId}` })))
+  const resolve = async args => {
+    try { return JSON.parse(text(await gw.invoke('data', tools.monitorResolve, args))).conId ?? null } catch { return null }
+  }
+  const nextMonths = n => {
+    const d = new Date()
+    return Array.from({ length: n }, (_, k) => {
+      const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + k, 1))
+      return `${t.getUTCFullYear()}${String(t.getUTCMonth() + 1).padStart(2, '0')}`
+    })
+  }
+  /** conId of the contract to quote: catalogue, monitor resolution, or the most traded next month. */
+  async function contractFor(p) {
+    const e = entries.get(p.symbol)
+    if (e?.conId) return { conId: e.conId, selectedBy: 'monitor-catalogue' }
+    const c = e?.contract
+    if (!c) return null
+    const base = { symbol: c.symbol, secType: c.secType, exchange: c.exchange, currency: c.currency,
+      ...(c.tradingClass ? { tradingClass: c.tradingClass } : {}), ...(c.multiplier ? { multiplier: c.multiplier } : {}) }
+    if (c.secType !== 'FUT' || c.expiry) {
+      const conId = await resolve({ ...base, ...(c.expiry ? { expiry: c.expiry } : {}) })
+      return conId ? { conId, selectedBy: 'monitor-resolve' } : null
+    }
+    // A continuous future with no current contract in the catalogue: quote the most traded of the next months.
+    const candidates = []
+    for (const month of nextMonths(6)) {
+      const conId = await resolve({ ...base, expiry: month })
+      if (conId) candidates.push(conId)
+      if (candidates.length === 4) break
+    }
+    let best = null
+    for (const conId of candidates) {
+      const q = await quote(conId)
+      const volume = Number(q.volume ?? 0)
+      if (!best || volume > best.volume) best = { conId, volume, q }
+    }
+    return best ? { conId: best.conId, selectedBy: 'max-volume-of-next-months', prefetched: best.q } : null
+  }
+  const primaries = universe.assets.filter(a => a.primary.realtime && a.primary.source === 'monitor').map(a => a.primary)
+  const quotes = {}, failed = []
+  const queueQ = [...primaries]
+  async function worker() {
+    for (let p = queueQ.shift(); p; p = queueQ.shift()) {
+      try {
+        const sel = await contractFor(p)
+        if (!sel) throw new Error('No IBKR contract found for the live quote')
+        const q = sel.prefetched ?? await quote(sel.conId)
+        quotes[p.seriesId] = { conId: String(sel.conId), selectedBy: sel.selectedBy, localSymbol: q.contract?.localSymbol ?? null,
+          last: q.last ?? null, bid: q.bid ?? null, ask: q.ask ?? null, volume: q.volume ?? null, timestamp: q.timestamp ?? null, dataType: q.dataType ?? null }
+      } catch (error) {
+        failed.push({ seriesId: p.seriesId, error: String(error?.message ?? error).slice(0, 200) })
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: 4 }, worker))
+  return { quotes, failed }
+}
 
 const unique = new Map()
 for (const spec of specs) for (const req of requestsFor(spec)) unique.set(req.key, req)
@@ -134,6 +209,24 @@ async function worker() {
 }
 await Promise.all(Array.from({ length: 4 }, worker))
 
+// Live quotes become one more verified payload of the run.
+let quoteSummary = null
+{
+  const capturedFrom = new Date().toISOString()
+  try {
+    const { quotes, failed } = await liveQuotes()
+    const bytes = Buffer.from(JSON.stringify({ capturedFrom, capturedTo: new Date().toISOString(), quotes, failed }), 'utf8')
+    const sha256 = createHash('sha256').update(bytes).digest('hex')
+    const file = `${cacheRel}/${sha256}.txt.gz`
+    try { await writeFile(join(root, file), gzipSync(bytes), { flag: 'wx' }) } catch (error) { if (error.code !== 'EEXIST') throw error }
+    fetched.set('uta:quotes', { key: 'uta:quotes', request: { tool: tools.utaQuote, count: Object.keys(quotes).length }, fetchedAt: capturedFrom, status: 'ok', file, sha256, bytes: bytes.length })
+    quoteSummary = { payloadKey: 'uta:quotes', count: Object.keys(quotes).length, failed }
+  } catch (error) {
+    fetched.set('uta:quotes', { key: 'uta:quotes', request: { tool: tools.utaQuote }, fetchedAt: capturedFrom, status: 'error', error: String(error?.message ?? error).slice(0, 300) })
+    quoteSummary = { payloadKey: 'uta:quotes', count: 0, failed: [] }
+  }
+}
+
 const series = specs.map(spec => {
   const parts = requestsFor(spec).map(r => fetched.get(r.key))
   return { seriesId: spec.seriesId, source: spec.source, symbol: spec.symbol, status: parts.every(p => p.status === 'ok') ? 'ok' : 'error', payloads: parts.map(p => p.key) }
@@ -142,7 +235,7 @@ const manifest = {
   schema: 'superai.global-map.manifest/1', runId, workspaceId: gw.workspaceId, start,
   universe: { file: 'global-map.universe.json', revision: universe.revision, sha256: createHash('sha256').update(universeBytes).digest('hex') },
   collectedFrom: [...fetched.values()].map(f => f.fetchedAt).sort()[0], collectedTo: new Date().toISOString(),
-  payloads: [...fetched.values()].sort((a, b) => (a.key < b.key ? -1 : 1)), series,
+  payloads: [...fetched.values()].sort((a, b) => (a.key < b.key ? -1 : 1)), series, quotes: quoteSummary,
 }
 await writeFile(join(runDir, 'global-map.manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' })
 const pruned = await prunePayloads()

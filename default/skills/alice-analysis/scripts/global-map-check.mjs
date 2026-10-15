@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { gateway, loadRun, workspaceRoot } from './global-map-io.mjs'
-import { deriveSeries, evaluateCondition, mapAt, prepareRun } from './global-map-lib.mjs'
+import { assetMainPoints, deriveSeries, evaluateCondition, mapAt, prepareRun } from './global-map-lib.mjs'
 
 // Nightly outcome check: evaluates every active thesis condition on a computed
 // map run and records one `check` event. Deterministic over the run's verified
@@ -49,20 +49,21 @@ async function collect(ids) {
 for (let i = 0; i < assetIds.length; i += 10) await collect(assetIds.slice(i, i + 10))
 
 // ---- measures as known at each session
-const specOf = new Map([
-  ...universe.assets.map(a => [a.assetId, a.series.seriesId]),
-  ...universe.macro.map(m => [m.assetId, m.seriesId]),
-])
+const assetOf = new Map(universe.assets.map(a => [a.assetId, a]))
+const macroOf = new Map(universe.macro.map(m => [m.assetId, m.seriesId]))
 const derivedOf = new Map(universe.derived.map(d => [d.assetId, d]))
-const monthlySeries = new Set([...universe.assets.filter(a => a.frequency === 'monthly').map(a => a.series.seriesId),
+const monthlySeries = new Set([
+  ...universe.assets.flatMap(a => (a.extras ?? []).filter(e => e.frequency === 'monthly').map(e => e.seriesId)),
   ...[...universe.aux, ...universe.macro].filter(s => s.frequency === 'monthly').map(s => s.seriesId)])
 function points(assetId) {
+  const a = assetOf.get(assetId)
+  if (a) return assetMainPoints(prep, a).points // same spliced main series as the map
   const d = derivedOf.get(assetId)
   if (d) {
-    const a = prep.parsed.get(d.a), b = prep.parsed.get(d.b)
-    return a && b ? deriveSeries(d.op, a, b, monthlySeries.has(d.a) || monthlySeries.has(d.b)) : []
+    const x = prep.parsed.get(d.a), y = prep.parsed.get(d.b)
+    return x && y ? deriveSeries(d.op, x, y, monthlySeries.has(d.a) || monthlySeries.has(d.b)) : []
   }
-  return prep.parsed.get(specOf.get(assetId)) ?? []
+  return prep.parsed.get(macroOf.get(assetId)) ?? []
 }
 const sessions = (assetId, n) => points(assetId).filter(p => p.date <= asOf).slice(-n).map(p => p.date)
 const maps = new Map()

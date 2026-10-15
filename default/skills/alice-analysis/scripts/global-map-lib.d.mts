@@ -47,3 +47,7 @@ export interface Condition {
 export function evaluateCondition(c: Condition, ctx: {
   asOf: string; sessions(assetId: string, n: number): string[]; value(assetId: string, key: string, date: string): number | null
 }): { conditionId: string; result: 'met' | 'not-met' | 'not-evaluable'; value: number | null; observedAt: string | null; reason?: string }
+export function spliceSeries(primary: Point[], history: Point[] | null, options?: { minOverlap?: number; minCorr?: number }): {
+  points: Point[]; splice: { junction: string; ratio: number; overlapSessions: number; weeklyCorrelation: number; historyFrom: string } | null; reason: string | null
+}
+export function assetMainPoints(prep: Prepared, asset: unknown): { points: Point[]; splice: unknown; spliceReason: string | null; historyOnly?: boolean }

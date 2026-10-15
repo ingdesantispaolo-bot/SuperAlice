@@ -1,8 +1,8 @@
 {
-  "schema": "superai.global-map.universe/1",
-  "revision": "2026-10-14.4",
+  "schema": "superai.global-map.universe/2",
+  "revision": "2026-10-14.v2.1",
   "baseCurrency": "EUR",
-  "note": "50 core assets chosen for analysis (not for tradability); aux FX, monitor futures and macro series are not counted. Sources verified in phase A (2026-10-13) and on 2026-10-14. Yahoo returns use adj_close. Known gap outside the 50: euro investment-grade credit spread (no free daily source).",
+  "note": "v2: each asset reads an IBKR primary (future, else ETF) kept by IbIvMonitor and quoted live through UTA; earlier history comes from the v1 series, ratio-spliced only before the primary starts and only when the overlap agrees; official levels (yields, spreads, fixings, spot indices) are prefixed extra measures. Exceptions without a real-time primary are noted per asset.",
   "groups": {
     "money": {
       "label": "Monetario",
@@ -51,15 +51,29 @@
       "label": "€STR",
       "group": "money",
       "assetClass": "rates",
-      "kind": "rate",
+      "kind": "stir",
       "currency": "EUR",
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.money.estr.fred",
-        "source": "fred",
-        "symbol": "ECBESTRVOLWGTTRMDMNRT",
-        "role": "observed-series"
-      }
+      "primary": {
+        "seriesId": "series.money.estr.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:ESTR:EUREX:EUR:FST3:",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": null,
+      "extras": [
+        {
+          "prefix": "fix",
+          "seriesId": "series.money.estr.fred",
+          "source": "fred",
+          "symbol": "ECBESTRVOLWGTTRMDMNRT",
+          "kind": "rate",
+          "frequency": "daily"
+        }
+      ],
+      "notes": "Primary: 3-month EUR STR future (implied rate = 100 - price). The published EUR STR is kept as fix_*."
     },
     {
       "assetId": "asset.money.sofr",
@@ -69,12 +83,16 @@
       "kind": "rate",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
         "seriesId": "series.money.sofr.fred",
         "source": "fred",
         "symbol": "SOFR",
-        "role": "observed-series"
-      }
+        "role": "observed-series",
+        "realtime": false
+      },
+      "history": null,
+      "extras": [],
+      "notes": "No real-time primary yet: the SOFR future (SR3) returns no data on this account (permissions)."
     },
     {
       "assetId": "asset.fx.eurusd",
@@ -85,13 +103,23 @@
       "currency": null,
       "quote": "USD per EUR",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.fx.eurusd.ibkr",
+        "source": "monitor",
+        "symbol": "CASH:EUR:IDEALPRO:USD::",
+        "instrument": "fx",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.fx.eurusd.yahoo",
         "source": "yahoo",
         "symbol": "EURUSD=X",
         "assetClass": "currency",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.fx.usdjpy",
@@ -102,31 +130,43 @@
       "currency": null,
       "quote": "JPY per USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.fx.usdjpy.ibkr",
+        "source": "monitor",
+        "symbol": "CASH:USD:IDEALPRO:JPY::",
+        "instrument": "fx",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.fx.usdjpy.yahoo",
         "source": "yahoo",
         "symbol": "JPY=X",
         "assetClass": "currency",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
-      "assetId": "asset.fx.usdcny",
-      "label": "USD/CNY (onshore)",
+      "assetId": "asset.fx.usdcnh",
+      "label": "USD/CNH (offshore)",
       "group": "fx",
       "assetClass": "currency",
       "kind": "fx",
       "currency": null,
-      "quote": "CNY per USD",
+      "quote": "CNH per USD",
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.fx.usdcny.yahoo",
-        "source": "yahoo",
-        "symbol": "CNY=X",
-        "assetClass": "currency",
-        "role": "observed-series"
+      "primary": {
+        "seriesId": "series.fx.usdcnh.ibkr",
+        "source": "monitor",
+        "symbol": "CASH:USD:IDEALPRO:CNH::",
+        "instrument": "fx",
+        "role": "observed-series",
+        "realtime": true
       },
-      "notes": "USD/CNH has no Yahoo history; onshore CNY used instead."
+      "history": null,
+      "extras": []
     },
     {
       "assetId": "asset.fx.dxy",
@@ -137,153 +177,296 @@
       "currency": null,
       "quote": "index",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.fx.dxy.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:DX:NYBOT:USD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.fx.dxy.yahoo",
         "source": "yahoo",
         "symbol": "DX-Y.NYB",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.rates.us.2y",
       "label": "USA 2 anni",
       "group": "rates",
       "assetClass": "rates",
-      "kind": "yield",
-      "currency": "USD",
+      "kind": "price",
+      "currency": null,
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.rates.us.2y.fred",
-        "source": "fred",
-        "symbol": "DGS2",
-        "role": "observed-series"
-      }
+      "primary": {
+        "seriesId": "series.rates.us.2y.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:ZT:CBOT:USD:ZT:2000",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": null,
+      "extras": [
+        {
+          "prefix": "yld",
+          "seriesId": "series.rates.us.2y.fred",
+          "source": "fred",
+          "symbol": "DGS2",
+          "kind": "yield",
+          "frequency": "daily"
+        }
+      ],
+      "notes": null
     },
     {
       "assetId": "asset.rates.us.10y",
       "label": "USA 10 anni",
       "group": "rates",
       "assetClass": "rates",
-      "kind": "yield",
-      "currency": "USD",
+      "kind": "price",
+      "currency": null,
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.rates.us.10y.fred",
-        "source": "fred",
-        "symbol": "DGS10",
-        "role": "observed-series"
-      }
+      "primary": {
+        "seriesId": "series.rates.us.10y.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:ZN:CBOT:USD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": null,
+      "extras": [
+        {
+          "prefix": "yld",
+          "seriesId": "series.rates.us.10y.fred",
+          "source": "fred",
+          "symbol": "DGS10",
+          "kind": "yield",
+          "frequency": "daily"
+        }
+      ],
+      "notes": null
     },
     {
       "assetId": "asset.rates.us.30y",
       "label": "USA 30 anni",
       "group": "rates",
       "assetClass": "rates",
-      "kind": "yield",
-      "currency": "USD",
+      "kind": "price",
+      "currency": null,
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.rates.us.30y.fred",
-        "source": "fred",
-        "symbol": "DGS30",
-        "role": "observed-series"
-      }
+      "primary": {
+        "seriesId": "series.rates.us.30y.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:ZB:CBOT:USD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": null,
+      "extras": [
+        {
+          "prefix": "yld",
+          "seriesId": "series.rates.us.30y.fred",
+          "source": "fred",
+          "symbol": "DGS30",
+          "kind": "yield",
+          "frequency": "daily"
+        }
+      ],
+      "notes": null
     },
     {
       "assetId": "asset.rates.de.2y",
       "label": "Germania 2 anni",
       "group": "rates",
       "assetClass": "rates",
-      "kind": "yield",
-      "currency": "EUR",
+      "kind": "price",
+      "currency": null,
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.rates.de.2y.bundesbank",
-        "source": "bundesbank",
-        "symbol": "BBSIS/D.I.ZAR.ZI.EUR.S1311.B.A604.R02XX.R.A.A._Z._Z.A",
-        "role": "observed-series"
+      "notes": "Bundesbank term-structure yield on Federal securities, not the on-the-run benchmark.",
+      "primary": {
+        "seriesId": "series.rates.de.2y.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:GBS:EUREX:EUR:FGBS:1000",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
       },
-      "notes": "Bundesbank term-structure yield on Federal securities, not the on-the-run benchmark."
+      "history": null,
+      "extras": [
+        {
+          "prefix": "yld",
+          "seriesId": "series.rates.de.2y.bundesbank",
+          "source": "bundesbank",
+          "symbol": "BBSIS/D.I.ZAR.ZI.EUR.S1311.B.A604.R02XX.R.A.A._Z._Z.A",
+          "kind": "yield",
+          "frequency": "daily"
+        }
+      ]
     },
     {
       "assetId": "asset.rates.de.10y",
       "label": "Germania 10 anni",
       "group": "rates",
       "assetClass": "rates",
-      "kind": "yield",
-      "currency": "EUR",
+      "kind": "price",
+      "currency": null,
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.rates.de.10y.bundesbank",
-        "source": "bundesbank",
-        "symbol": "BBSIS/D.I.ZAR.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A",
-        "role": "observed-series"
+      "notes": "Bundesbank term-structure yield on Federal securities, not the on-the-run benchmark.",
+      "primary": {
+        "seriesId": "series.rates.de.10y.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:GBL:EUREX:EUR:FGBL:1000",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
       },
-      "notes": "Bundesbank term-structure yield on Federal securities, not the on-the-run benchmark."
+      "history": null,
+      "extras": [
+        {
+          "prefix": "yld",
+          "seriesId": "series.rates.de.10y.bundesbank",
+          "source": "bundesbank",
+          "symbol": "BBSIS/D.I.ZAR.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A",
+          "kind": "yield",
+          "frequency": "daily"
+        }
+      ]
     },
     {
       "assetId": "asset.rates.it.10y",
       "label": "Italia 10 anni",
       "group": "rates",
       "assetClass": "rates",
-      "kind": "yield",
-      "currency": "EUR",
-      "frequency": "monthly",
-      "series": {
-        "seriesId": "series.rates.it.10y.fred-monthly",
-        "source": "fred",
-        "symbol": "IRLTLT01ITM156N",
-        "role": "observed-series"
+      "kind": "price",
+      "currency": null,
+      "frequency": "daily",
+      "notes": "Daily and real-time through the BTP future; the yield level is still the monthly OECD series (yld_*).",
+      "primary": {
+        "seriesId": "series.rates.it.10y.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:BTP:EUREX:EUR:FBTP:1000",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
       },
-      "notes": "GAP: only the monthly OECD long-term rate is automatic; daily needs Investing.com or the monitor BTP feed."
+      "history": null,
+      "extras": [
+        {
+          "prefix": "yld",
+          "seriesId": "series.rates.it.10y.fred-monthly",
+          "source": "fred",
+          "symbol": "IRLTLT01ITM156N",
+          "kind": "yield",
+          "frequency": "monthly"
+        }
+      ]
     },
     {
       "assetId": "asset.rates.jp.10y",
       "label": "Giappone 10 anni",
       "group": "rates",
       "assetClass": "rates",
-      "kind": "yield",
-      "currency": "JPY",
+      "kind": "price",
+      "currency": null,
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.rates.jp.10y.mof",
-        "source": "mof-jgb",
-        "symbol": "10Y",
-        "role": "observed-series"
-      }
+      "primary": {
+        "seriesId": "series.rates.jp.10y.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:JGB:OSE.JPN:JPY::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": null,
+      "extras": [
+        {
+          "prefix": "yld",
+          "seriesId": "series.rates.jp.10y.mof",
+          "source": "mof-jgb",
+          "symbol": "10Y",
+          "kind": "yield",
+          "frequency": "daily"
+        }
+      ],
+      "notes": null
     },
     {
       "assetId": "asset.credit.us.ig",
       "label": "Credito IG USA (OAS)",
       "group": "credit",
       "assetClass": "credit",
-      "kind": "spread",
+      "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.credit.us.ig.fred",
-        "source": "fred",
-        "symbol": "BAMLC0A0CM",
-        "role": "observed-series"
+      "notes": "ICE BofA OAS on FRED: about 3 years of history only.",
+      "primary": {
+        "seriesId": "series.credit.us.ig.ibkr",
+        "source": "monitor",
+        "symbol": "STK:LQD:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
       },
-      "notes": "ICE BofA OAS on FRED: about 3 years of history only."
+      "history": {
+        "seriesId": "series.credit.us.ig.yahoo-lqd",
+        "source": "yahoo",
+        "symbol": "LQD",
+        "assetClass": "equity",
+        "role": "proxy"
+      },
+      "extras": [
+        {
+          "prefix": "oas",
+          "seriesId": "series.credit.us.ig.fred",
+          "source": "fred",
+          "symbol": "BAMLC0A0CM",
+          "kind": "spread",
+          "frequency": "daily"
+        }
+      ]
     },
     {
       "assetId": "asset.credit.us.hy",
       "label": "Credito HY USA (OAS)",
       "group": "credit",
       "assetClass": "credit",
-      "kind": "spread",
+      "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.credit.us.hy.fred",
-        "source": "fred",
-        "symbol": "BAMLH0A0HYM2",
-        "role": "observed-series"
+      "notes": "ICE BofA OAS on FRED: about 3 years of history only.",
+      "primary": {
+        "seriesId": "series.credit.us.hy.ibkr",
+        "source": "monitor",
+        "symbol": "STK:HYG:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
       },
-      "notes": "ICE BofA OAS on FRED: about 3 years of history only."
+      "history": {
+        "seriesId": "series.credit.us.hy.yahoo-hyg",
+        "source": "yahoo",
+        "symbol": "HYG",
+        "assetClass": "equity",
+        "role": "proxy"
+      },
+      "extras": [
+        {
+          "prefix": "oas",
+          "seriesId": "series.credit.us.hy.fred",
+          "source": "fred",
+          "symbol": "BAMLH0A0HYM2",
+          "kind": "spread",
+          "frequency": "daily"
+        }
+      ]
     },
     {
       "assetId": "asset.credit.eu.hy",
@@ -293,13 +476,16 @@
       "kind": "spread",
       "currency": "EUR",
       "frequency": "daily",
-      "series": {
+      "notes": "No real-time primary: no euro high-yield future or US-listed ETF on this account.",
+      "primary": {
         "seriesId": "series.credit.eu.hy.fred",
         "source": "fred",
         "symbol": "BAMLHE00EHYIOAS",
-        "role": "observed-series"
+        "role": "observed-series",
+        "realtime": false
       },
-      "notes": "ICE BofA OAS on FRED: about 3 years of history only."
+      "history": null,
+      "extras": []
     },
     {
       "assetId": "asset.credit.em.corp",
@@ -309,13 +495,16 @@
       "kind": "spread",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "notes": "No real-time primary yet (EMB is sovereign, not corporate).",
+      "primary": {
         "seriesId": "series.credit.em.corp.fred",
         "source": "fred",
         "symbol": "BAMLEMCBPIOAS",
-        "role": "observed-series"
+        "role": "observed-series",
+        "realtime": false
       },
-      "notes": "Replaces the euro IG slot (no free daily source). ICE BofA OAS on FRED: about 3 years of history only."
+      "history": null,
+      "extras": []
     },
     {
       "assetId": "asset.vol.vix",
@@ -325,13 +514,27 @@
       "kind": "level",
       "currency": null,
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.vol.vix.yahoo",
-        "source": "yahoo",
-        "symbol": "^VIX",
-        "assetClass": "equity",
-        "role": "observed-series"
-      }
+      "primary": {
+        "seriesId": "series.vol.vix.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:VIX:CFE:USD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": null,
+      "extras": [
+        {
+          "prefix": "idx",
+          "seriesId": "series.vol.vix.yahoo",
+          "source": "yahoo",
+          "symbol": "^VIX",
+          "kind": "level",
+          "frequency": "daily",
+          "assetClass": "equity"
+        }
+      ],
+      "notes": null
     },
     {
       "assetId": "asset.vol.vstoxx",
@@ -341,12 +544,26 @@
       "kind": "level",
       "currency": null,
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.vol.vstoxx.stoxx",
-        "source": "stoxx",
-        "symbol": "V2TX",
-        "role": "observed-series"
-      }
+      "primary": {
+        "seriesId": "series.vol.vstoxx.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:V2TX:EUREX:EUR::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": null,
+      "extras": [
+        {
+          "prefix": "idx",
+          "seriesId": "series.vol.vstoxx.stoxx",
+          "source": "stoxx",
+          "symbol": "V2TX",
+          "kind": "level",
+          "frequency": "daily"
+        }
+      ],
+      "notes": null
     },
     {
       "assetId": "asset.vol.move",
@@ -356,29 +573,43 @@
       "kind": "level",
       "currency": null,
       "frequency": "daily",
-      "series": {
+      "primary": {
         "seriesId": "series.vol.move.yahoo",
         "source": "yahoo",
         "symbol": "^MOVE",
         "assetClass": "equity",
-        "role": "observed-series"
-      }
+        "role": "observed-series",
+        "realtime": false
+      },
+      "history": null,
+      "extras": [],
+      "notes": "No future exists: end-of-day index only."
     },
     {
       "assetId": "asset.eq.global",
-      "label": "Azioni globali (ACWI)",
+      "label": "Azioni globali (MSCI World)",
       "group": "eq-areas",
       "assetClass": "equity",
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.eq.global.yahoo",
+      "primary": {
+        "seriesId": "series.eq.global.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:MXWO:EUREX:USD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
+        "seriesId": "series.eq.global.yahoo-urth",
         "source": "yahoo",
-        "symbol": "ACWI",
+        "symbol": "URTH",
         "assetClass": "equity",
         "role": "proxy"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.eq.us",
@@ -388,13 +619,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.eq.us.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:ES:CME:USD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.eq.us.yahoo",
         "source": "yahoo",
         "symbol": "^GSPC",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.eq.eu",
@@ -404,29 +645,49 @@
       "kind": "price",
       "currency": "EUR",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.eq.eu.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:SXXP:EUREX:EUR:FXXP:",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.eq.eu.yahoo",
         "source": "yahoo",
         "symbol": "^STOXX",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.eq.it",
-      "label": "Italia (FTSE MIB)",
+      "label": "Italia (MSCI Italy, EWI)",
       "group": "eq-areas",
       "assetClass": "equity",
       "kind": "price",
-      "currency": "EUR",
+      "currency": "USD",
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.eq.it.yahoo",
+      "primary": {
+        "seriesId": "series.eq.it.ibkr",
+        "source": "monitor",
+        "symbol": "STK:EWI:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
+        "seriesId": "series.eq.it.yahoo-ewi",
         "source": "yahoo",
-        "symbol": "FTSEMIB.MI",
+        "symbol": "EWI",
         "assetClass": "equity",
-        "role": "observed-series"
-      }
+        "role": "proxy"
+      },
+      "extras": [],
+      "notes": "ETF until the IDEM subscription enables the FTSE MIB future (FIB)."
     },
     {
       "assetId": "asset.eq.jp",
@@ -436,93 +697,153 @@
       "kind": "price",
       "currency": "JPY",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.eq.jp.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:N225:OSE.JPN:JPY::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.eq.jp.yahoo",
         "source": "yahoo",
         "symbol": "^N225",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": "Osaka future, quotes delayed 15 minutes on this account."
     },
     {
       "assetId": "asset.eq.cn",
-      "label": "Cina (MCHI)",
+      "label": "Cina e Hong Kong (Hang Seng)",
       "group": "eq-areas",
       "assetClass": "equity",
       "kind": "price",
-      "currency": "USD",
+      "currency": "HKD",
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.eq.cn.yahoo",
+      "primary": {
+        "seriesId": "series.eq.cn.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:HSI:HKFE:HKD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
+        "seriesId": "series.eq.cn.yahoo-hsi",
         "source": "yahoo",
-        "symbol": "MCHI",
+        "symbol": "^HSI",
         "assetClass": "equity",
-        "role": "proxy"
-      }
+        "role": "observed-series"
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.eq.in",
-      "label": "India (Nifty 50)",
-      "group": "eq-areas",
-      "assetClass": "equity",
-      "kind": "price",
-      "currency": "INR",
-      "frequency": "daily",
-      "series": {
-        "seriesId": "series.eq.in.yahoo",
-        "source": "yahoo",
-        "symbol": "^NSEI",
-        "assetClass": "equity",
-        "role": "observed-series"
-      }
-    },
-    {
-      "assetId": "asset.eq.em",
-      "label": "Emergenti (EEM)",
+      "label": "India (MSCI India)",
       "group": "eq-areas",
       "assetClass": "equity",
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.eq.in.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:MXIN:EUREX:USD:FMIN:",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
+        "seriesId": "series.eq.in.yahoo-inda",
+        "source": "yahoo",
+        "symbol": "INDA",
+        "assetClass": "equity",
+        "role": "proxy"
+      },
+      "extras": [],
+      "notes": null
+    },
+    {
+      "assetId": "asset.eq.em",
+      "label": "Emergenti (MSCI EM)",
+      "group": "eq-areas",
+      "assetClass": "equity",
+      "kind": "price",
+      "currency": "USD",
+      "frequency": "daily",
+      "primary": {
+        "seriesId": "series.eq.em.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:MXEF:EUREX:USD:FMEM:",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.eq.em.yahoo",
         "source": "yahoo",
         "symbol": "EEM",
         "assetClass": "equity",
         "role": "proxy"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.style.us.growth",
-      "label": "Growth USA (IVW)",
+      "label": "Growth USA (Russell 1000 Growth)",
       "group": "eq-styles",
       "assetClass": "equity",
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.style.us.growth.yahoo",
+      "primary": {
+        "seriesId": "series.style.us.growth.ibkr",
+        "source": "monitor",
+        "symbol": "STK:IWF:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
+        "seriesId": "series.style.us.growth.yahoo-iwf",
         "source": "yahoo",
-        "symbol": "IVW",
+        "symbol": "IWF",
         "assetClass": "equity",
         "role": "proxy"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.style.us.value",
-      "label": "Value USA (IVE)",
+      "label": "Value USA (Russell 1000 Value)",
       "group": "eq-styles",
       "assetClass": "equity",
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
-        "seriesId": "series.style.us.value.yahoo",
+      "primary": {
+        "seriesId": "series.style.us.value.ibkr",
+        "source": "monitor",
+        "symbol": "STK:IWD:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
+        "seriesId": "series.style.us.value.yahoo-iwd",
         "source": "yahoo",
-        "symbol": "IVE",
+        "symbol": "IWD",
         "assetClass": "equity",
         "role": "proxy"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.style.us.small",
@@ -532,13 +853,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.style.us.small.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:RTY:CME:USD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.style.us.small.yahoo",
         "source": "yahoo",
         "symbol": "^RUT",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.sector.us.materials",
@@ -548,13 +879,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.sector.us.materials.ibkr",
+        "source": "monitor",
+        "symbol": "STK:XLB:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.sector.us.materials.yahoo",
         "source": "yahoo",
         "symbol": "XLB",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.sector.us.communication",
@@ -564,13 +905,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.sector.us.communication.ibkr",
+        "source": "monitor",
+        "symbol": "STK:XLC:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.sector.us.communication.yahoo",
         "source": "yahoo",
         "symbol": "XLC",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.sector.us.energy",
@@ -580,13 +931,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.sector.us.energy.ibkr",
+        "source": "monitor",
+        "symbol": "STK:XLE:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.sector.us.energy.yahoo",
         "source": "yahoo",
         "symbol": "XLE",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.sector.us.financials",
@@ -596,13 +957,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.sector.us.financials.ibkr",
+        "source": "monitor",
+        "symbol": "STK:XLF:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.sector.us.financials.yahoo",
         "source": "yahoo",
         "symbol": "XLF",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.sector.us.industrials",
@@ -612,13 +983,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.sector.us.industrials.ibkr",
+        "source": "monitor",
+        "symbol": "STK:XLI:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.sector.us.industrials.yahoo",
         "source": "yahoo",
         "symbol": "XLI",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.sector.us.tech",
@@ -628,13 +1009,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.sector.us.tech.ibkr",
+        "source": "monitor",
+        "symbol": "STK:XLK:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.sector.us.tech.yahoo",
         "source": "yahoo",
         "symbol": "XLK",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.sector.us.staples",
@@ -644,13 +1035,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.sector.us.staples.ibkr",
+        "source": "monitor",
+        "symbol": "STK:XLP:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.sector.us.staples.yahoo",
         "source": "yahoo",
         "symbol": "XLP",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.sector.us.realestate",
@@ -660,13 +1061,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.sector.us.realestate.ibkr",
+        "source": "monitor",
+        "symbol": "STK:XLRE:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.sector.us.realestate.yahoo",
         "source": "yahoo",
         "symbol": "XLRE",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.sector.us.utilities",
@@ -676,13 +1087,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.sector.us.utilities.ibkr",
+        "source": "monitor",
+        "symbol": "STK:XLU:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.sector.us.utilities.yahoo",
         "source": "yahoo",
         "symbol": "XLU",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.sector.us.health",
@@ -692,13 +1113,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.sector.us.health.ibkr",
+        "source": "monitor",
+        "symbol": "STK:XLV:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.sector.us.health.yahoo",
         "source": "yahoo",
         "symbol": "XLV",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.sector.us.discretionary",
@@ -708,13 +1139,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.sector.us.discretionary.ibkr",
+        "source": "monitor",
+        "symbol": "STK:XLY:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.sector.us.discretionary.yahoo",
         "source": "yahoo",
         "symbol": "XLY",
         "assetClass": "equity",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.cmd.gold",
@@ -724,14 +1165,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "notes": "Front-month continuous future: roll effects included.",
+      "primary": {
+        "seriesId": "series.cmd.gold.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:GC:COMEX:USD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.cmd.gold.yahoo",
         "source": "yahoo",
         "symbol": "GC=F",
         "assetClass": "commodity",
         "role": "observed-series"
       },
-      "notes": "Front-month continuous future: roll effects included."
+      "extras": []
     },
     {
       "assetId": "asset.cmd.silver",
@@ -741,14 +1191,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "notes": "Front-month continuous future: roll effects included.",
+      "primary": {
+        "seriesId": "series.cmd.silver.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:SI:COMEX:USD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.cmd.silver.yahoo",
         "source": "yahoo",
         "symbol": "SI=F",
         "assetClass": "commodity",
         "role": "observed-series"
       },
-      "notes": "Front-month continuous future: roll effects included."
+      "extras": []
     },
     {
       "assetId": "asset.cmd.brent",
@@ -758,14 +1217,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "notes": "Front-month future, not Dated Brent spot (FRED DCOILBRENTEU).",
+      "primary": {
+        "seriesId": "series.cmd.brent.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:BZ:NYMEX:USD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.cmd.brent.yahoo",
         "source": "yahoo",
         "symbol": "BZ=F",
         "assetClass": "commodity",
         "role": "observed-series"
       },
-      "notes": "Front-month future, not Dated Brent spot (FRED DCOILBRENTEU)."
+      "extras": []
     },
     {
       "assetId": "asset.cmd.natgas",
@@ -775,14 +1243,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "notes": "Front-month continuous future: roll effects included.",
+      "primary": {
+        "seriesId": "series.cmd.natgas.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:NG:NYMEX:USD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.cmd.natgas.yahoo",
         "source": "yahoo",
         "symbol": "NG=F",
         "assetClass": "commodity",
         "role": "observed-series"
       },
-      "notes": "Front-month continuous future: roll effects included."
+      "extras": []
     },
     {
       "assetId": "asset.cmd.copper",
@@ -792,14 +1269,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "notes": "Front-month continuous future: roll effects included.",
+      "primary": {
+        "seriesId": "series.cmd.copper.ibkr",
+        "source": "monitor",
+        "symbol": "FUT:HG:COMEX:USD::",
+        "instrument": "future",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.cmd.copper.yahoo",
         "source": "yahoo",
         "symbol": "HG=F",
         "assetClass": "commodity",
         "role": "observed-series"
       },
-      "notes": "Front-month continuous future: roll effects included."
+      "extras": []
     },
     {
       "assetId": "asset.cmd.agri",
@@ -809,13 +1295,23 @@
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
-      "series": {
+      "primary": {
+        "seriesId": "series.cmd.agri.ibkr",
+        "source": "monitor",
+        "symbol": "STK:DBA:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.cmd.agri.yahoo",
         "source": "yahoo",
         "symbol": "DBA",
         "assetClass": "equity",
         "role": "proxy"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.crypto.btc",
@@ -826,13 +1322,23 @@
       "currency": "USD",
       "frequency": "daily",
       "calendar": "7d",
-      "series": {
+      "primary": {
+        "seriesId": "series.crypto.btc.ibkr",
+        "source": "monitor",
+        "symbol": "CRYPTO:BTC:PAXOS:USD::",
+        "instrument": "crypto",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.crypto.btc.yahoo",
         "source": "yahoo",
         "symbol": "BTC-USD",
         "assetClass": "crypto",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     },
     {
       "assetId": "asset.crypto.eth",
@@ -843,40 +1349,34 @@
       "currency": "USD",
       "frequency": "daily",
       "calendar": "7d",
-      "series": {
+      "primary": {
+        "seriesId": "series.crypto.eth.ibkr",
+        "source": "monitor",
+        "symbol": "CRYPTO:ETH:PAXOS:USD::",
+        "instrument": "crypto",
+        "role": "observed-series",
+        "realtime": true
+      },
+      "history": {
         "seriesId": "series.crypto.eth.yahoo",
         "source": "yahoo",
         "symbol": "ETH-USD",
         "assetClass": "crypto",
         "role": "observed-series"
-      }
+      },
+      "extras": [],
+      "notes": null
     }
   ],
   "aux": [
     {
-      "seriesId": "series.fx.usdinr.yahoo",
-      "label": "USD/INR (conversione)",
+      "seriesId": "series.fx.usdhkd.yahoo",
+      "label": "USD/HKD (conversione)",
       "kind": "fx",
       "frequency": "daily",
       "source": "yahoo",
-      "symbol": "INR=X",
+      "symbol": "HKD=X",
       "assetClass": "currency"
-    },
-    {
-      "seriesId": "series.fut.btp.monitor",
-      "label": "Future BTP 10 anni (Eurex, IBKR)",
-      "kind": "price",
-      "frequency": "daily",
-      "source": "monitor",
-      "symbol": "FUT:BTP:EUREX:EUR:FBTP:1000"
-    },
-    {
-      "seriesId": "series.fut.bund.monitor",
-      "label": "Future Bund 10 anni (Eurex, IBKR)",
-      "kind": "price",
-      "frequency": "daily",
-      "source": "monitor",
-      "symbol": "FUT:GBL:EUREX:EUR:FGBL:1000"
     }
   ],
   "macro": [
@@ -994,53 +1494,53 @@
     },
     {
       "assetId": "derived.ratio.btp-bund-futures",
-      "seriesId": "series.derived.ratio.btp-bund-futures",
+      "seriesId": "series.derived.ratio.btp-bund-futures.v2",
       "assetClass": "rates",
       "label": "BTP / Bund (future): sale se il BTP fa meglio del Bund",
       "op": "ratio",
-      "a": "series.fut.btp.monitor",
-      "b": "series.fut.bund.monitor",
+      "a": "series.rates.it.10y.ibkr",
+      "b": "series.rates.de.10y.ibkr",
       "unit": "ratio",
       "notes": "Price ratio of continuous futures from IbIvMonitor: direction of the BTP-Bund spread (rising = spread tightening), not a spread in basis points."
     },
     {
       "assetId": "derived.ratio.growth-value",
-      "seriesId": "series.derived.ratio.growth-value",
+      "seriesId": "series.derived.ratio.growth-value.v2",
       "assetClass": "equity",
       "label": "Growth / Value USA",
       "op": "ratio",
-      "a": "series.style.us.growth.yahoo",
-      "b": "series.style.us.value.yahoo",
+      "a": "series.style.us.growth.ibkr",
+      "b": "series.style.us.value.ibkr",
       "unit": "ratio"
     },
     {
       "assetId": "derived.ratio.small-large",
-      "seriesId": "series.derived.ratio.small-large",
+      "seriesId": "series.derived.ratio.small-large.v2",
       "assetClass": "equity",
       "label": "Small / Large USA",
       "op": "ratio",
-      "a": "series.style.us.small.yahoo",
-      "b": "series.eq.us.yahoo",
+      "a": "series.style.us.small.ibkr",
+      "b": "series.eq.us.ibkr",
       "unit": "ratio"
     },
     {
       "assetId": "derived.ratio.gold-silver",
-      "seriesId": "series.derived.ratio.gold-silver",
+      "seriesId": "series.derived.ratio.gold-silver.v2",
       "assetClass": "commodity",
       "label": "Oro / Argento",
       "op": "ratio",
-      "a": "series.cmd.gold.yahoo",
-      "b": "series.cmd.silver.yahoo",
+      "a": "series.cmd.gold.ibkr",
+      "b": "series.cmd.silver.ibkr",
       "unit": "ratio"
     }
   ],
   "valuations": [
     {
       "assetId": "asset.eq.global",
-      "seriesId": "series.valuation.eq.global.ishares-acwi",
+      "seriesId": "series.valuation.eq.global.ishares-urth",
       "provider": "ishares",
-      "fund": "ACWI",
-      "url": "https://www.ishares.com/us/products/239600/ishares-msci-acwi-etf",
+      "fund": "URTH",
+      "url": "https://www.ishares.com/us/products/239696/ishares-msci-world-etf",
       "fields": [
         "pe_trailing",
         "pb"
@@ -1135,10 +1635,10 @@
     },
     {
       "assetId": "asset.style.us.growth",
-      "seriesId": "series.valuation.style.us.growth.ishares-ivw",
+      "seriesId": "series.valuation.style.us.growth.ishares-iwf",
       "provider": "ishares",
-      "fund": "IVW",
-      "url": "https://www.ishares.com/us/products/239725/ishares-sp-500-growth-etf",
+      "fund": "IWF",
+      "url": "https://www.ishares.com/us/products/239706/ishares-russell-1000-growth-etf",
       "fields": [
         "pe_trailing",
         "pb"
@@ -1146,10 +1646,10 @@
     },
     {
       "assetId": "asset.style.us.value",
-      "seriesId": "series.valuation.style.us.value.ishares-ive",
+      "seriesId": "series.valuation.style.us.value.ishares-iwd",
       "provider": "ishares",
-      "fund": "IVE",
-      "url": "https://www.ishares.com/us/products/239728/ishares-sp-500-value-etf",
+      "fund": "IWD",
+      "url": "https://www.ishares.com/us/products/239708/ishares-russell-1000-value-etf",
       "fields": [
         "pe_trailing",
         "pb"

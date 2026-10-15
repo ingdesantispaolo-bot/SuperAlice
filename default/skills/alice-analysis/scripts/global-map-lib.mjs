@@ -344,14 +344,20 @@ const DEFS = {
   val_pb: "Prezzo / valore di libro del fondo di riferimento, come pubblicato dall'emittente",
 }
 
+const EXTRA_LABEL = { yld: 'Rendimento ufficiale', oas: 'Spread OAS', fix: 'Tasso ufficiale (fixing)', idx: 'Indice a pronti' }
+const extraOf = (e, key) => (e.extras ?? []).find(x => key.startsWith(`${x.prefix}_`))
+
 export function measureCatalog(entries) {
   const measures = []
   for (const e of entries) {
-    if (e.status === 'missing' || e.status === 'gap') continue
     for (const measureKey of Object.keys(e.measures)) {
+      const extra = extraOf(e, measureKey)
+      const base = extra ? measureKey.slice(extra.prefix.length + 1) : measureKey
       measures.push({
-        assetId: e.assetId, measureKey, timeframe: e.frequency === 'monthly' ? '1M' : '1D', seriesId: e.measureSeries?.[measureKey] ?? e.seriesId,
-        unit: unitOf(e, measureKey), definition: DEFS[measureKey] ?? measureKey, completedBarsOnly: true,
+        assetId: e.assetId, measureKey, timeframe: (extra?.frequency ?? e.frequency) === 'monthly' ? '1M' : '1D', seriesId: e.measureSeries?.[measureKey] ?? e.seriesId,
+        unit: extra ? unitOf({ kind: extra.kind }, base) : unitOf(e, measureKey),
+        definition: extra ? `${EXTRA_LABEL[extra.prefix] ?? extra.prefix}: ${DEFS[base] ?? base}` : (e.kind === 'stir' && DEFS[base] ? `Tasso implicito del future (100 − prezzo): ${DEFS[base]}` : DEFS[measureKey] ?? measureKey),
+        completedBarsOnly: true,
       })
     }
   }
@@ -359,6 +365,7 @@ export function measureCatalog(entries) {
 }
 
 function unitOf(e, key) {
+  if (e.kind === 'stir') e = { ...e, kind: 'rate' }
   if (key.endsWith('_pct') || key.endsWith('_pct_eur') || key === 'vol20_ann_pct') return '%'
   if (key.endsWith('_pp')) return 'pp'
   if (key.startsWith('val_')) return 'ratio'
@@ -435,9 +442,72 @@ export function computeValuation(payloads, asOf) {
 
 const VALUATION_SOURCES = new Set(['ishares', 'ssga'])
 
-/** Parse a verified run once: series points, issuer valuations and warnings. */
+/**
+ * Join an older history to the primary series. The history is used only before
+ * the first session both series share, ratio-scaled to the primary there, and
+ * only if their weekly returns agree over the overlap (close times differ between
+ * futures and cash markets, so daily returns would understate the agreement).
+ */
+export function spliceSeries(primary, history, { minOverlap = 100, minCorr = 0.97 } = {}) {
+  if (!primary.length || !history?.length) return { points: primary, splice: null, reason: !primary.length ? 'no primary data' : null }
+  const h = new Map(history.map(p => [p.date, p.value]))
+  const common = primary.filter(p => h.has(p.date))
+  if (common.length < minOverlap) return { points: primary, splice: null, reason: `overlap of ${common.length} sessions is below ${minOverlap}` }
+  const rp = [], rh = []
+  for (let i = 5; i < common.length; i += 5) {
+    rp.push(Math.log(common[i].value / common[i - 5].value))
+    rh.push(Math.log(h.get(common[i].date) / h.get(common[i - 5].date)))
+  }
+  const m1 = mean(rp), m2 = mean(rh)
+  const cov = rp.reduce((s, x, i) => s + (x - m1) * (rh[i] - m2), 0)
+  const corr = cov / Math.sqrt(rp.reduce((s, x) => s + (x - m1) ** 2, 0) * rh.reduce((s, x) => s + (x - m2) ** 2, 0))
+  if (!(corr >= minCorr)) return { points: primary, splice: null, reason: `weekly-return correlation ${corr.toFixed(3)} is below ${minCorr}` }
+  const junction = common[0]
+  const ratio = junction.value / h.get(junction.date)
+  const before = history.filter(p => p.date < junction.date).map(p => ({ date: p.date, value: p.value * ratio, close: p.value * ratio }))
+  return {
+    points: [...before, ...primary.filter(p => p.date >= junction.date)],
+    splice: { junction: junction.date, ratio: round(ratio, 6), overlapSessions: common.length, weeklyCorrelation: round(corr, 4), historyFrom: history[0].date },
+    reason: null,
+  }
+}
+
+/** Main daily points of a v2 asset: primary, spliced history, STIR prices as implied rates. */
+export function assetMainPoints(prep, a) {
+  const primary = prep.parsed.get(a.primary.seriesId) ?? []
+  // IBKR daily bars are prices without distributions: the history uses unadjusted closes too,
+  // so the two segments share one return basis.
+  const rawHistory = a.history ? prep.parsed.get(a.history.seriesId) : null
+  const history = rawHistory && a.primary.source === 'monitor' ? rawHistory.map(p => ({ date: p.date, value: p.close ?? p.value })) : rawHistory
+  // While the monitor is still collecting a new primary, the row reads the declared history instead.
+  if (!primary.length && history?.length) {
+    const pts = a.kind === 'stir' ? history.map(p => ({ date: p.date, value: 100 - p.value })) : history
+    return { points: pts, splice: null, spliceReason: 'primary not collected yet: history only', historyOnly: true }
+  }
+  const s = a.primary.source === 'monitor' && history ? spliceSeries(primary, history) : { points: primary, splice: null, reason: a.history && !history ? 'history unavailable' : null }
+  const points = a.kind === 'stir' ? s.points.map(p => ({ date: p.date, value: 100 - p.value })) : s.points
+  return { points, splice: s.splice, spliceReason: s.reason }
+}
+
+/** Live quote of a primary, if the run captured one: last trade, else the bid/ask mid. */
+function liveOf(quote, kind) {
+  if (!quote) return null
+  const n = x => (x === null || x === undefined || x === '' ? NaN : Number(x))
+  const last = n(quote.last), bid = n(quote.bid), ask = n(quote.ask)
+  const price = last > 0 ? last : bid > 0 && ask > 0 ? (bid + ask) / 2 : null
+  if (price === null) return { status: 'no-price', at: quote.timestamp ?? null, dataType: quote.dataType ?? null }
+  const value = kind === 'stir' ? 100 - price : price
+  return { status: 'ok', value: round(value, 6), basis: last > 0 ? 'last' : 'mid', at: quote.timestamp ?? null, dataType: quote.dataType ?? null, contract: quote.localSymbol ?? null }
+}
+
+/** Parse a verified run once: series points, issuer valuations, live quotes and warnings. */
 export function prepareRun({ manifest, universe, payloadText }) {
-  const warnings = [], parsed = new Map(), valuationPayloads = new Map()
+  const warnings = [], parsed = new Map(), valuationPayloads = new Map(), quotes = new Map()
+  if (manifest.quotes?.payloadKey) {
+    const q = payloadText.get(manifest.quotes.payloadKey)
+    if (q) for (const [seriesId, quote] of Object.entries(JSON.parse(q.text).quotes ?? {})) quotes.set(seriesId, quote)
+    else warnings.push('live quotes: collection failed')
+  }
   for (const s of manifest.series) {
     if (s.status !== 'ok') { warnings.push(`${s.seriesId}: collection failed`); continue }
     if (VALUATION_SOURCES.has(s.source)) {
@@ -455,16 +525,20 @@ export function prepareRun({ manifest, universe, payloadText }) {
     const series = manifest.series.find(x => x.seriesId === id)
     return series ? payloadText.get(series.payloads[0])?.fetchedAt.slice(0, 10) ?? null : null
   }
-  const fx = {
-    EURUSD: parsed.get('series.fx.eurusd.yahoo') ?? [], USDJPY: parsed.get('series.fx.usdjpy.yahoo') ?? [],
-    USDCNY: parsed.get('series.fx.usdcny.yahoo') ?? [], USDINR: parsed.get('series.fx.usdinr.yahoo') ?? [],
+  const prep = { universe, parsed, valuationPayloads, quotes, fetchedDay, warnings }
+  // EUR conversion uses the same FX series the map shows (IBKR primary, history spliced).
+  const fxAsset = id => universe.assets.find(a => a.assetId === id)
+  prep.fx = {
+    EURUSD: fxAsset('asset.fx.eurusd') ? assetMainPoints(prep, fxAsset('asset.fx.eurusd')).points : [],
+    USDJPY: fxAsset('asset.fx.usdjpy') ? assetMainPoints(prep, fxAsset('asset.fx.usdjpy')).points : [],
+    USDHKD: parsed.get('series.fx.usdhkd.yahoo') ?? [],
   }
-  return { universe, parsed, valuationPayloads, fetchedDay, fx, warnings }
+  return prep
 }
 
 /** Every asset, macro series and derived series of the map as of a date, with group rankings. */
 export function mapAt(prep, asOf) {
-  const { universe, parsed, valuationPayloads, fetchedDay, fx } = prep
+  const { universe, parsed, valuationPayloads, quotes, fetchedDay, fx } = prep
   const entry = (spec, base) => {
     const points = parsed.get(spec.seriesId)
     if (spec.source === 'none') return { ...base, status: 'gap', lastDate: null, staleDays: null, measures: {} }
@@ -473,12 +547,44 @@ export function mapAt(prep, asOf) {
     const incompleteFrom = spec.calendar === '7d' ? fetchedDay(spec.seriesId) : null
     return { ...base, ...computeSeries(spec, points, { asOf, fx, incompleteFrom }) }
   }
-  const assets = universe.assets.map(a => entry(
-    { ...a.series, kind: a.kind, currency: a.currency, frequency: a.frequency, calendar: a.calendar },
-    { assetId: a.assetId, label: a.label, group: a.group, assetClass: a.assetClass, kind: a.kind, currency: a.currency, frequency: a.frequency, seriesId: a.series.seriesId, source: a.series.source, notes: a.notes ?? null },
-  ))
+  const assets = universe.assets.map(a => {
+    const kind = a.kind === 'stir' ? 'rate' : a.kind
+    const base = { assetId: a.assetId, label: a.label, group: a.group, assetClass: a.assetClass, kind: a.kind, currency: a.currency, frequency: a.frequency,
+      seriesId: a.primary.seriesId, source: a.primary.source, instrument: a.primary.instrument ?? null, realtime: a.primary.realtime === true, notes: a.notes ?? null }
+    const main = assetMainPoints(prep, a)
+    const result = main.points.length
+      ? { ...base, ...computeSeries({ kind, currency: a.currency, frequency: a.frequency, calendar: a.calendar, source: a.primary.source }, main.points,
+        { asOf, fx, incompleteFrom: a.calendar === '7d' ? fetchedDay(a.primary.seriesId) : null }) }
+      : { ...base, status: 'missing', lastDate: null, staleDays: null, measures: {} }
+    result.splice = main.splice
+    result.spliceReason = main.spliceReason
+    result.historyOnly = main.historyOnly === true
+    result.measureSeries = {}
+    // Official levels (yields, spreads, fixings, spot indices) as prefixed measures of their own series.
+    result.extras = []
+    for (const e of a.extras ?? []) {
+      const pts = parsed.get(e.seriesId)
+      if (!pts) { result.extras.push({ prefix: e.prefix, seriesId: e.seriesId, status: 'missing' }); continue }
+      const r = computeSeries({ kind: e.kind, frequency: e.frequency, source: e.source }, pts, { asOf })
+      for (const [k, v] of Object.entries(r.measures)) { result.measures[`${e.prefix}_${k}`] = v; result.measureSeries[`${e.prefix}_${k}`] = e.seriesId }
+      result.extras.push({ prefix: e.prefix, seriesId: e.seriesId, kind: e.kind, frequency: e.frequency, status: r.status, lastDate: r.lastDate, staleDays: r.staleDays })
+    }
+    // Live quote: only when it is newer than the last settled session and not after the cutoff day.
+    const live = liveOf(quotes.get(a.primary.seriesId), a.kind)
+    if (live && live.status === 'ok' && (main.historyOnly || !result.lastDate)) {
+      // No settled IBKR bar to compare with (primary still collecting): show the price, no change.
+      result.live = { ...live, vsLastSettlementPct: null, vsLastSettlementBp: null, comparable: false }
+    } else if (live && live.status === 'ok' && live.at && result.lastDate && live.at.slice(0, 10) > result.lastDate && live.at.slice(0, 10) <= shiftDate(asOf, { days: 1 })) {
+      const lastSettled = main.points.filter(p => p.date <= result.lastDate).at(-1)?.value
+      live.vsLastSettlementPct = lastSettled && a.kind !== 'stir' ? round((live.value / lastSettled - 1) * 100, 4) : null
+      live.vsLastSettlementBp = lastSettled && a.kind === 'stir' ? round((live.value - lastSettled) * 100, 2) : null
+      result.live = live
+    } else result.live = live ? { ...live, status: live.status === 'ok' ? 'not-newer-than-settlement' : live.status } : null
+    return result
+  })
   const macro = universe.macro.map(m => entry(m, { assetId: m.assetId, label: m.label, assetClass: m.assetClass, kind: m.kind, frequency: m.frequency, seriesId: m.seriesId, source: m.source, notes: null }))
-  const frequencyOf = id => [...universe.assets.map(x => ({ ...x.series, frequency: x.frequency })), ...universe.aux, ...universe.macro].find(s => s.seriesId === id)?.frequency
+  const seriesSpecs = [...universe.assets.flatMap(x => [{ ...x.primary, frequency: x.frequency }, ...(x.history ? [{ ...x.history, frequency: x.frequency }] : []), ...(x.extras ?? [])]), ...universe.aux, ...universe.macro]
+  const frequencyOf = id => seriesSpecs.find(s => s.seriesId === id)?.frequency
   const derived = universe.derived.map(d => {
     const a = parsed.get(d.a), b = parsed.get(d.b)
     const kind = d.op === 'ratio' ? 'price-ratio' : 'spread-bp'
@@ -495,7 +601,7 @@ export function mapAt(prep, asOf) {
     const v = computeValuation(payloads, asOf)
     a.valuation = { status: v.status, asOf: v.asOf, staleDays: v.staleDays, sources: v.sources, excluded: v.excluded }
     Object.assign(a.measures, v.measures)
-    a.measureSeries = Object.fromEntries(v.sources.map(x => [x.measureKey, x.seriesId]))
+    Object.assign(a.measureSeries, Object.fromEntries(v.sources.map(x => [x.measureKey, x.seriesId])))
   }
   const ranking = applyRelative(universe.groups, assets)
   const groups = Object.fromEntries(Object.entries(universe.groups).map(([id, g]) => [id, { ...g, rankingByRet3mEur: ranking[id] ?? null }]))
@@ -552,19 +658,30 @@ export function catalogEntries(universe) {
   const asset = (assetId, label, assetClass, currency) => assets.push({
     kind: 'catalog', entityId: assetId, label, assetClass, role: 'asset', ...(currency ? { currency } : {}),
   })
-  for (const a of universe.assets) {
-    asset(a.assetId, a.label, a.assetClass, a.kind === 'price' ? a.currency : null)
-    if (a.series.source === 'none') continue
-    const yieldLike = a.kind === 'yield'
+  const seen = new Set()
+  const seriesEntry = (a, s, kind, frequency, description) => {
+    if (seen.has(s.seriesId) || s.source === 'none') return
+    seen.add(s.seriesId)
+    const yieldLike = kind === 'yield'
+    const priceLike = kind === 'price' || kind === 'stir' || kind === 'level' && s.source === 'monitor'
     series.push({
-      kind: 'catalog', entityId: a.series.seriesId, label: `${a.label} (${a.series.symbol})`, assetClass: a.assetClass,
-      role: a.series.role ?? 'observed-series', assetId: a.assetId, source: SOURCE_LABEL[a.series.source], sourceSeriesId: a.series.symbol,
-      currency: a.kind === 'price' || yieldLike || a.kind === 'rate' || a.kind === 'spread' ? (a.currency ?? null) : null,
-      unit: a.kind === 'price' ? (a.currency ?? 'index points') : RAW_UNIT[a.kind],
-      method: method([a.frequency === 'monthly' ? 'Monthly series.' : 'Daily series.', a.notes ?? ''].join(' ').trim()),
-      yieldType: yieldLike ? (PAR_SOURCES.has(a.series.source) && a.frequency !== 'monthly' ? 'par' : 'unknown') : null,
+      kind: 'catalog', entityId: s.seriesId, label: `${a.label} (${s.symbol})`, assetClass: a.assetClass,
+      role: s.role ?? 'observed-series', assetId: a.assetId, source: SOURCE_LABEL[s.source], sourceSeriesId: s.symbol,
+      currency: priceLike || yieldLike || kind === 'rate' || kind === 'spread' ? (a.currency ?? null) : null,
+      unit: kind === 'stir' ? 'price (100 - rate)' : priceLike ? (a.currency ?? 'index points') : RAW_UNIT[kind],
+      method: method([frequency === 'monthly' ? 'Monthly series.' : 'Daily series.', description ?? ''].join(' ').trim()),
+      yieldType: yieldLike ? (PAR_SOURCES.has(s.source) && frequency !== 'monthly' ? 'par' : 'unknown') : null,
       benchmarkEquivalence: 'not-established', availability: 'source-verified',
     })
+  }
+  for (const a of universe.assets) {
+    asset(a.assetId, a.label, a.assetClass, a.kind === 'price' ? a.currency : null)
+    const primaryKind = a.kind
+    seriesEntry(a, a.primary, primaryKind, a.frequency, a.primary.source === 'monitor'
+      ? `IBKR ${a.primary.instrument ?? 'instrument'} kept by IbIvMonitor (settled daily bars; live quotes through UTA). Earlier history, when present, is ratio-spliced before the first common session if weekly returns agree. ${a.notes ?? ''}`
+      : a.notes ?? '')
+    if (a.history) seriesEntry(a, a.history, a.kind === 'stir' ? 'rate' : a.kind, a.frequency, 'Earlier history of the asset, used only before the IBKR primary starts.')
+    for (const e of a.extras ?? []) seriesEntry(a, e, e.kind, e.frequency, `Official level shown as ${e.prefix}_* measures.`)
   }
   for (const m of universe.macro) {
     asset(m.assetId, m.label, m.assetClass, null)
@@ -607,24 +724,69 @@ const fmt = (x, digits = 1, signed = false) => {
   return x < 0 ? `−${s}` : signed && x > 0 ? `+${s}` : s
 }
 const arrow = t => (t === 1 ? '↑' : t === -1 ? '↓' : t === 0 ? '↔' : '–')
-const quality = e => (e.status === 'ok' ? 'ok' : e.status === 'stale' ? `vecchio (${e.staleDays} g)` : e.status === 'gap' ? 'lacuna' : 'mancante')
+const quality = e => {
+  const base = e.status === 'ok' ? 'ok' : e.status === 'stale' ? `vecchio (${e.staleDays} g)` : e.status === 'gap' ? 'lacuna' : 'mancante'
+  if (e.historyOnly) return `${base}; solo storico secondario, IBKR in raccolta`
+  if (e.splice) return `${base}; storico raccordato fino al ${shortDate(e.splice.junction)}/${e.splice.junction.slice(2, 4)}`
+  return base
+}
 const shortDate = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '–')
 
 export function renderTables(metrics) {
   const out = [`<!-- generated by global-map-calc ${metrics.methodVersion}, run ${metrics.runId}, as of ${metrics.asOf}; do not edit numbers by hand -->`]
   const all = [...metrics.assets, ...metrics.derived]
+  const liveCell = r => {
+    const l = r.live
+    if (!r.realtime) return 'fine giornata'
+    if (!l) return '–'
+    if (l.status !== 'ok') return l.status === 'not-newer-than-settlement' ? 'chiuso' : 'n.d. (nessun prezzo)'
+    const digits = r.kind === 'stir' ? 3 : l.value >= 1000 ? 0 : l.value >= 10 ? 2 : 4
+    if (l.comparable === false) return `${fmt(l.value, digits)} (nessun regolamento IBKR da confrontare)`
+    const delta = l.vsLastSettlementBp !== null && l.vsLastSettlementBp !== undefined ? `${fmt(l.vsLastSettlementBp, 1, true)} bp` : `${fmt(l.vsLastSettlementPct, 2, true)}%`
+    return `${fmt(l.value, digits)} (${delta}${l.dataType === 'delayed' ? ', ritardato' : ''})`
+  }
   for (const [groupId, group] of Object.entries(metrics.groups)) {
     const rows = metrics.assets.filter(a => a.group === groupId)
     if (!rows.length) continue
     out.push('', `### ${group.label}`, '')
+    if (groupId === 'rates') {
+      out.push('| Voce | Future dal vivo (vs regolamento) | Future 1M | Future 3M | Rendimento | Dato al | Δ 1M | Δ 12M | Percentile 5 anni | Trend rendimento B/M/L | Qualità |')
+      out.push('|---|---:|---:|---:|---:|---|---:|---:|---:|---|---|')
+      for (const r of rows) {
+        const m = r.measures, monthly = r.extras?.find(x => x.prefix === 'yld')?.frequency === 'monthly'
+        out.push(`| ${r.label} | ${liveCell(r)} | ${fmt(m.ret_1m_pct, 2, true)}% | ${fmt(m.ret_3m_pct, 2, true)}% | ${fmt(m.yld_last, 2)} %${monthly ? ' (mensile)' : ''} | ${shortDate(r.extras?.find(x => x.prefix === 'yld')?.lastDate)} | ${fmt(m.yld_chg_1m, 0, true)} | ${fmt(m.yld_chg_12m, 0, true)} bp | ${fmt(m.yld_level_pctile_5y, 0)} | ${arrow(m.yld_trend_short)} ${arrow(m.yld_trend_medium)} ${arrow(m.yld_trend_long)} | ${quality(r)} |`)
+      }
+      continue
+    }
+    if (groupId === 'credit') {
+      out.push('| Voce | ETF dal vivo (vs chiusura) | ETF 1M | ETF 12M | Spread OAS | Dato al | Δ 1M | Δ 12M | Percentile | Trend spread B/M/L | Qualità |')
+      out.push('|---|---:|---:|---:|---:|---|---:|---:|---:|---|---|')
+      for (const r of rows) {
+        const m = r.measures, oas = r.realtime ? 'oas_' : ''
+        const pick = k => m[`${oas}${k}`]
+        out.push(`| ${r.label} | ${liveCell(r)} | ${r.realtime ? `${fmt(m.ret_1m_pct, 1, true)}%` : '–'} | ${r.realtime ? `${fmt(m.ret_12m_pct, 1, true)}%` : '–'} | ${fmt(pick('last'), 0)} bp | ${shortDate(r.realtime ? r.extras?.find(x => x.prefix === 'oas')?.lastDate : r.lastDate)} | ${fmt(pick('chg_1m'), 0, true)} | ${fmt(pick('chg_12m'), 0, true)} bp | ${fmt(pick('level_pctile_5y'), 0)} | ${arrow(pick('trend_short'))} ${arrow(pick('trend_medium'))} ${arrow(pick('trend_long'))} | ${quality(r)} |`)
+      }
+      continue
+    }
+    if (groupId === 'vol' || groupId === 'money') {
+      const vol = groupId === 'vol'
+      out.push(`| Voce | ${vol ? 'Future' : 'Future (tasso implicito)'} dal vivo | Regolamento | Dato al | Δ 1M | Δ 3M | Percentile 5 anni | ${vol ? 'Indice a pronti' : 'Tasso ufficiale'} | Qualità |`)
+      out.push('|---|---:|---:|---|---:|---:|---:|---:|---|')
+      for (const r of rows) {
+        const m = r.measures, cu = LEVEL_KINDS[r.kind === 'stir' ? 'rate' : r.kind]?.changeUnit ?? ''
+        const extra = vol ? m.idx_last : m.fix_last
+        out.push(`| ${r.label} | ${liveCell(r)} | ${fmt(m.last, vol ? 2 : 3)}${vol ? '' : ' %'} | ${shortDate(r.lastDate)} | ${fmt(m.chg_1m, vol ? 1 : 0, true)} | ${fmt(m.chg_3m, vol ? 1 : 0, true)} ${cu} | ${fmt(m.level_pctile_5y, 0)} | ${extra === undefined ? '–' : `${fmt(extra, 2)}${vol ? '' : ' %'}`} | ${quality(r)} |`)
+      }
+      continue
+    }
     const priceLike = rows.every(r => r.kind === 'price' || r.kind === 'fx')
     if (priceLike) {
       const eur = rows.some(r => r.kind === 'price' && r.currency && r.currency !== 'EUR')
-      out.push(`| Voce | Ultimo | Dato al | 1S | 1M | 3M | 12M |${eur ? ' 12M in EUR |' : ''}${group.relative ? ' Forza rel. 3M |' : ''} Trend B/M/L | RSI | Dist. media 200 | Qualità |`)
-      out.push(`|---|---:|---|---:|---:|---:|---:|${eur ? '---:|' : ''}${group.relative ? '---:|' : ''}---|---:|---:|---|`)
+      out.push(`| Voce | Dal vivo (vs regolamento) | Regolamento | Dato al | 1S | 1M | 3M | 12M |${eur ? ' 12M in EUR |' : ''}${group.relative ? ' Forza rel. 3M |' : ''} Trend B/M/L | RSI | Dist. media 200 | Qualità |`)
+      out.push(`|---|---:|---:|---|---:|---:|---:|---:|${eur ? '---:|' : ''}${group.relative ? '---:|' : ''}---|---:|---:|---|`)
       for (const r of rows) {
         const m = r.measures
-        out.push(`| ${r.label} | ${fmt(m.last, m.last >= 1000 ? 0 : 2)} | ${shortDate(r.lastDate)} | ${fmt(m.ret_1w_pct, 1, true)}% | ${fmt(m.ret_1m_pct, 1, true)}% | ${fmt(m.ret_3m_pct, 1, true)}% | ${fmt(m.ret_12m_pct, 1, true)}% |`
+        out.push(`| ${r.label} | ${liveCell(r)} | ${fmt(m.last, m.last >= 1000 ? 0 : m.last >= 10 ? 2 : 4)} | ${shortDate(r.lastDate)} | ${fmt(m.ret_1w_pct, 1, true)}% | ${fmt(m.ret_1m_pct, 1, true)}% | ${fmt(m.ret_3m_pct, 1, true)}% | ${fmt(m.ret_12m_pct, 1, true)}% |`
           + `${eur ? ` ${fmt(m.ret_12m_pct_eur, 1, true)}% |` : ''}${group.relative ? ` ${fmt(m.rs_3m_eur_pp, 1, true)} |` : ''}`
           + ` ${arrow(m.trend_short)} ${arrow(m.trend_medium)} ${arrow(m.trend_long)} | ${fmt(m.rsi14, 0)} | ${fmt(m.dist_sma200_pct, 1, true)}% | ${quality(r)} |`)
       }

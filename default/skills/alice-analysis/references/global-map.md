@@ -8,12 +8,22 @@ numbers in any report come from them, never typed by hand.
 ## Universe
 
 `references/global-map-universe.json` is the default universe (schema
-`superai.global-map.universe/1`): 50 assets in ten groups, auxiliary FX for EUR
-conversion, a small macro register and derived spreads/ratios. A desk copy at
+`superai.global-map.universe/2`): 50 assets in ten groups. A desk copy at
 `research/market-assistant/global-map/universe.json` takes precedence when
 present; the user reviews and edits that copy. Asset ids (`asset.*`) are economic
-identities; series ids (`series.*`) name one source for one asset. Known gaps are
-explicit (`source: "none"`) and stay visible in the map.
+identities; series ids (`series.*`) name one source for one asset.
+
+Each asset has:
+
+- `primary`: the instrument the map follows, an IBKR future, else an ETF (or
+  IDEALPRO FX, Paxos crypto), kept by IbIvMonitor (`source: "monitor"`, real time).
+  46 of 50 assets have one; SOFR, euro HY and EM corporate spreads and MOVE stay
+  end-of-day until an accessible instrument exists.
+- `history`: an older series of the same exposure (Yahoo, official sources), used
+  only before the primary starts.
+- `extras`: official levels shown as prefixed measures of their own series:
+  `yld_` government yields, `oas_` credit spreads, `fix_` published fixings,
+  `idx_` spot volatility indices.
 
 ## Step 1: collect (network, no calculation)
 
@@ -23,11 +33,14 @@ Run inside the owning desk shell:
 node .agents/skills/alice-analysis/scripts/global-map-collect.mjs [--start YYYY-MM-DD] [--run-id <id>]
 ```
 
-It reads Yahoo bars and FRED/TraderHub data through this Workspace's own CLI
-gateway, IbIvMonitor daily bars through `alice monitor`, and Bundesbank, Japan
-MOF and STOXX files from their official URLs. The default window is six years,
-enough for every current measure. It creates `research/market-assistant/runs/<runId>/`
-exclusively with a copy of the universe and `global-map.manifest.json`.
+It reads settled IBKR daily bars of every primary from IbIvMonitor (`alice monitor`),
+then a live quote of each real-time primary through UTA (read-only; conIds from the
+monitor catalogue or its read-only `instrument-resolve`; a continuous future with no
+current contract quotes the most traded of the next months). It also reads Yahoo,
+FRED/TraderHub, Bundesbank, Japan MOF, STOXX and issuer pages for history, levels
+and valuations. The default window is six years. It creates
+`research/market-assistant/runs/<runId>/` exclusively with a copy of the universe
+and `global-map.manifest.json` (the quotes are one more payload, `uta:quotes`).
 
 Original payloads go to `research/market-assistant/global-map/cache/payloads/<sha256>.txt.gz`
 (gzip; the hash is of the uncompressed payload), a temporary cache excluded from
@@ -38,10 +51,13 @@ thesis:
 
 ```bash
 node .agents/skills/alice-analysis/scripts/global-map-pin.mjs --run-id <id> --reason "weekly review"
-``` This cache disappears when IbIvMonitor persists external series
-(request SUPERAI-EXTERNAL-SERIES-01); IbIvMonitor owns long-term persistence. Exit code 2 means some payloads failed: the run is
-still valid and the failures are listed; do not retry in a loop. It never opens
-an IBKR connection and never starts monitor history jobs.
+```
+
+The cache disappears when IbIvMonitor persists external series
+(SUPERAI-EXTERNAL-SERIES-01); IbIvMonitor owns long-term persistence. Exit code 2
+means some payloads failed: the run is still valid and the failures are listed; do
+not retry in a loop. It never opens its own IBKR connection and never starts
+monitor history jobs.
 
 ## Step 2: calculate (offline, deterministic)
 
@@ -66,8 +82,24 @@ the library's `METHOD_VERSION` changes and comparisons restart from a new baseli
 
 ## Reading the measures
 
-- Returns use calendar windows (7 days, 1/3/12 months, year to date) on Yahoo
-  adjusted closes, so ETF returns include dividends; indices are price only.
+- Returns use calendar windows (7 days, 1/3/12 months, year to date) on settled
+  IBKR daily bars of the primary. Their basis differs by instrument and is stated:
+  a continuous future (ratio-adjusted at each roll) earns the return in excess of
+  cash, so it includes carry (interest minus dividends for equity indices, roll
+  yield for commodities): the S&P 500 future trails the index by roughly the US
+  rate minus the dividend yield, and a backwardated Brent future outruns the front
+  month. ETFs and FX are price returns without distributions. Compare within a
+  group, where the basis is shared.
+- History before the primary starts is joined only after a check: at least 100
+  common sessions and weekly-return correlation of at least 0.97, then ratio-scaled
+  at the first common session (`splice` in the metrics, "storico raccordato fino
+  al …" in the table). History uses unadjusted closes, the same basis as IBKR bars.
+  While a new primary is still being collected, the row reads the declared history
+  and says so (`historyOnly`); its live quote is shown without a change figure.
+- `live`: the IBKR quote at collection time (last trade, else bid/ask mid), with
+  its timestamp and `live`/`delayed` type, compared with the last settlement only
+  when it is newer. Live values are never measures: conditions and judgments use
+  settled bars.
 - `_eur` returns convert through EUR/USD and USD crosses at the same dates;
   EUR assets repeat the local return so groups compare in one currency.
 - Trend states are +1 up, -1 down, 0 mixed: short = 20-observation mean and
@@ -80,9 +112,11 @@ the library's `METHOD_VERSION` changes and comparisons restart from a new baseli
 - `status`: `ok`, `stale` (older than the source's normal lag), `missing`
   (collection or parsing failed) or `gap` (no source). A stale or missing value
   is never presented as current, and a gap is never filled with an estimate.
-- Front-month futures (gold, Brent, gas, copper) include roll effects; Brent is
-  the future, not Dated Brent spot. Bundesbank yields come from the Federal
-  securities term structure, not the on-the-run Bund. Italy 10Y is monthly only.
+- Bond futures are prices: their `ret_*` move against yields. The yield level and
+  its changes come from the official series (`yld_*`); Bundesbank yields come from
+  the Federal securities term structure, not the on-the-run Bund, and the Italian
+  yield level is monthly (the BTP future itself is daily and live). STIR futures
+  (EUR STR) are shown as implied rates (100 − price).
 
 ## Valuations
 
