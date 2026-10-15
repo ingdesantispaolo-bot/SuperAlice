@@ -76,7 +76,7 @@ export function parseSeries(source, texts, symbol) {
         throw new Error('Monitor evidence hash mismatch')
       }
       for (const b of JSON.parse(canonical).bars ?? []) {
-        if (b.finality === 'final') points.push({ date: b.session, value: b.close })
+        if (b.finality === 'final') points.push({ date: b.session, value: b.close, volume: b.volume ?? null })
       }
     } else if (source === 'traderhub-valuation') {
       const card = (JSON.parse(text).cards ?? []).find(c => c.id === symbol)
@@ -453,11 +453,21 @@ export function spliceSeries(primary, history, { minOverlap = 100, minCorr = 0.9
   const h = new Map(history.map(p => [p.date, p.value]))
   const common = primary.filter(p => h.has(p.date))
   if (common.length < minOverlap) return { points: primary, splice: null, reason: `overlap of ${common.length} sessions is below ${minOverlap}` }
+  // Calendar weeks (last value of each ISO week in both series) absorb different
+  // session-date conventions, e.g. FX days closing in New York versus London.
+  const weekOf = iso => { const d = dayNumber(iso); return Math.floor((d + 3) / 7) }
+  const lastByWeek = pts => { const m = new Map(); for (const p of pts) m.set(weekOf(p.date), p.value); return m }
+  const from = common[0].date, to = common.at(-1).date
+  const wp = lastByWeek(primary.filter(p => p.date >= from && p.date <= to))
+  const wh = lastByWeek(history.filter(p => p.date >= from && p.date <= to))
+  const weeks = [...wp.keys()].filter(w => wh.has(w)).sort((x, y) => x - y)
   const rp = [], rh = []
-  for (let i = 5; i < common.length; i += 5) {
-    rp.push(Math.log(common[i].value / common[i - 5].value))
-    rh.push(Math.log(h.get(common[i].date) / h.get(common[i - 5].date)))
+  for (let i = 1; i < weeks.length; i++) {
+    if (weeks[i] !== weeks[i - 1] + 1) continue
+    rp.push(Math.log(wp.get(weeks[i]) / wp.get(weeks[i - 1])))
+    rh.push(Math.log(wh.get(weeks[i]) / wh.get(weeks[i - 1])))
   }
+  if (rp.length < 20) return { points: primary, splice: null, reason: `only ${rp.length} comparable weeks` }
   const m1 = mean(rp), m2 = mean(rh)
   const cov = rp.reduce((s, x, i) => s + (x - m1) * (rh[i] - m2), 0)
   const corr = cov / Math.sqrt(rp.reduce((s, x) => s + (x - m1) ** 2, 0) * rh.reduce((s, x) => s + (x - m2) ** 2, 0))
@@ -559,6 +569,14 @@ export function mapAt(prep, asOf) {
     result.splice = main.splice
     result.spliceReason = main.spliceReason
     result.historyOnly = main.historyOnly === true
+    // Liquidity of the primary: a future that rarely trades has theoretical settlements.
+    if (a.primary.source === 'monitor' && a.primary.instrument !== 'fx') {
+      const recent = (parsed.get(a.primary.seriesId) ?? []).filter(p => p.date <= asOf).slice(-60)
+      if (recent.length) {
+        const vols = recent.map(p => Number(p.volume ?? 0)).sort((x, y) => x - y)
+        result.liquidity = { sessions: recent.length, medianVolume: vols[Math.floor(vols.length / 2)], zeroVolumeShare: round(vols.filter(v => v === 0).length / vols.length, 3) }
+      }
+    }
     result.measureSeries = {}
     // Official levels (yields, spreads, fixings, spot indices) as prefixed measures of their own series.
     result.extras = []
@@ -726,6 +744,7 @@ const fmt = (x, digits = 1, signed = false) => {
 const arrow = t => (t === 1 ? '↑' : t === -1 ? '↓' : t === 0 ? '↔' : '–')
 const quality = e => {
   const base = e.status === 'ok' ? 'ok' : e.status === 'stale' ? `vecchio (${e.staleDays} g)` : e.status === 'gap' ? 'lacuna' : 'mancante'
+  if (e.liquidity && e.liquidity.zeroVolumeShare > 0.3) return `${base}; poco scambiato (${Math.round(e.liquidity.zeroVolumeShare * 100)}% sedute senza scambi)`
   if (e.historyOnly) return `${base}; solo storico secondario, IBKR in raccolta`
   if (e.splice) return `${base}; storico raccordato fino al ${shortDate(e.splice.junction)}/${e.splice.junction.slice(2, 4)}`
   return base

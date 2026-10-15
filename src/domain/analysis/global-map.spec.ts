@@ -71,7 +71,7 @@ describe('global map source parsing', () => {
     ] })
     const envelope = (hash: string) => JSON.stringify({ content: [{ type: 'text', text: canonical }], _meta: { 'ibivmonitor/sha256': hash } })
     expect(parseSeries('monitor', [envelope(createHash('sha256').update(canonical).digest('hex'))], 'FUT:BTP'))
-      .toEqual([{ date: '2026-10-12', value: 111.1 }])
+      .toEqual([{ date: '2026-10-12', value: 111.1, volume: null }])
     expect(() => parseSeries('monitor', [envelope('0'.repeat(64))], 'FUT:BTP')).toThrow('hash mismatch')
   })
 

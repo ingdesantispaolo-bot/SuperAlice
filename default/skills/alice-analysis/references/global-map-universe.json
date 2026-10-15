@@ -1,6 +1,6 @@
 {
   "schema": "superai.global-map.universe/2",
-  "revision": "2026-10-14.v2.1",
+  "revision": "2026-10-15.v2.2",
   "baseCurrency": "EUR",
   "note": "v2: each asset reads an IBKR primary (future, else ETF) kept by IbIvMonitor and quoted live through UTA; earlier history comes from the v1 series, ratio-spliced only before the primary starts and only when the overlap agrees; official levels (yields, spreads, fixings, spot indices) are prefixed extra measures. Exceptions without a real-time primary are noted per asset.",
   "groups": {
@@ -587,18 +587,18 @@
     },
     {
       "assetId": "asset.eq.global",
-      "label": "Azioni globali (MSCI World)",
+      "label": "Azioni globali (MSCI World, URTH)",
       "group": "eq-areas",
       "assetClass": "equity",
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
       "primary": {
-        "seriesId": "series.eq.global.ibkr",
+        "seriesId": "series.eq.global.ibkr-urth",
         "source": "monitor",
-        "symbol": "FUT:MXWO:EUREX:USD::",
-        "instrument": "future",
-        "role": "observed-series",
+        "symbol": "STK:URTH:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
         "realtime": true
       },
       "history": {
@@ -609,7 +609,7 @@
         "role": "proxy"
       },
       "extras": [],
-      "notes": null
+      "notes": "ETF: the Eurex MSCI World future had no trades in 312 of 521 sessions (theoretical settlements)."
     },
     {
       "assetId": "asset.eq.us",
@@ -743,18 +743,18 @@
     },
     {
       "assetId": "asset.eq.in",
-      "label": "India (MSCI India)",
+      "label": "India (MSCI India, INDA)",
       "group": "eq-areas",
       "assetClass": "equity",
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
       "primary": {
-        "seriesId": "series.eq.in.ibkr",
+        "seriesId": "series.eq.in.ibkr-inda",
         "source": "monitor",
-        "symbol": "FUT:MXIN:EUREX:USD:FMIN:",
-        "instrument": "future",
-        "role": "observed-series",
+        "symbol": "STK:INDA:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
         "realtime": true
       },
       "history": {
@@ -765,22 +765,22 @@
         "role": "proxy"
       },
       "extras": [],
-      "notes": null
+      "notes": "ETF: the Eurex MSCI India future trades too thinly for a real-time primary."
     },
     {
       "assetId": "asset.eq.em",
-      "label": "Emergenti (MSCI EM)",
+      "label": "Emergenti (MSCI EM, EEM)",
       "group": "eq-areas",
       "assetClass": "equity",
       "kind": "price",
       "currency": "USD",
       "frequency": "daily",
       "primary": {
-        "seriesId": "series.eq.em.ibkr",
+        "seriesId": "series.eq.em.ibkr-eem",
         "source": "monitor",
-        "symbol": "FUT:MXEF:EUREX:USD:FMEM:",
-        "instrument": "future",
-        "role": "observed-series",
+        "symbol": "STK:EEM:SMART:USD::",
+        "instrument": "etf",
+        "role": "proxy",
         "realtime": true
       },
       "history": {
@@ -791,7 +791,7 @@
         "role": "proxy"
       },
       "extras": [],
-      "notes": null
+      "notes": "ETF: the Eurex MSCI EM future trades too thinly for a real-time primary."
     },
     {
       "assetId": "asset.style.us.growth",
